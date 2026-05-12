@@ -1,0 +1,221 @@
+package handler
+
+import (
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"ridehailing/backend/internal/pkg/middleware"
+	"ridehailing/backend/internal/pkg/response"
+	"ridehailing/backend/internal/service"
+)
+
+type DriverTripHandler struct {
+	tripService *service.TripService
+}
+
+func NewDriverTripHandler(tripService *service.TripService) *DriverTripHandler {
+	return &DriverTripHandler{tripService: tripService}
+}
+
+// 司机创建行程
+type createTripRequest struct {
+	VehicleType   string                  `json:"vehicleType"`
+	StartCity     string                  `json:"startCity"`
+	EndCity       string                  `json:"endCity"`
+	DepartureTime string                  `json:"departureTime"`
+	ArrivalTime   string                  `json:"arrivalTime"`
+	SeatTotal     int                     `json:"seatTotal"`
+	PriceCent     int                     `json:"priceCent"`
+	Stops         []createTripStopRequest `json:"stops"`
+}
+
+type createTripStopRequest struct {
+	StopOrder         int    `json:"stopOrder"`
+	StopName          string `json:"stopName"`
+	PlanArrivalTime   string `json:"planArrivalTime"`
+	PlanDepartureTime string `json:"planDepartureTime"`
+}
+
+func (h *DriverTripHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
+	currentUser, ok := middleware.CurrentUser(r)
+
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req createTripRequest
+
+	// 判断是否传入了 JSON body
+	if err := decodeJSONBody(r.Body, &req); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+		return
+	}
+
+	departureTime, err := parseRequiredRFC3339(req.DepartureTime, "departureTime")
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	arrivalTime, err := parseRequiredRFC3339(req.ArrivalTime, "arrivalTime")
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	stops := make([]service.TripStopInput, 0, len(req.Stops))
+	for _, stop := range req.Stops {
+		planArrivalTime, err := parseOptionalRFC3339(stop.PlanArrivalTime)
+		if err != nil {
+			response.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		planDepartureTime, err := parseOptionalRFC3339(stop.PlanDepartureTime)
+		if err != nil {
+			response.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		stops = append(stops, service.TripStopInput{
+			StopOrder:         stop.StopOrder,
+			StopName:          stop.StopName,
+			PlanArrivalTime:   planArrivalTime,
+			PlanDepartureTime: planDepartureTime,
+		})
+	}
+
+	trip, err := h.tripService.CreateTrip(r.Context(), currentUser.ID, currentUser.Role, service.CreateTripInput{
+		VehicleType:   req.VehicleType,
+		StartCity:     req.StartCity,
+		EndCity:       req.EndCity,
+		DepartureTime: departureTime,
+		ArrivalTime:   arrivalTime,
+		SeatTotal:     req.SeatTotal,
+		PriceCent:     req.PriceCent,
+		Stops:         stops,
+	})
+
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.Created(w, trip)
+}
+
+func (h *DriverTripHandler) ListTrips(w http.ResponseWriter, r *http.Request) {
+	currentUser, ok := middleware.CurrentUser(r)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	trips, err := h.tripService.ListDriverTrips(r.Context(), currentUser.ID, currentUser.Role)
+
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.Success(w, trips)
+}
+
+func (h *DriverTripHandler) GetTripDetail(w http.ResponseWriter, r *http.Request) {
+	currentUser, ok := middleware.CurrentUser(r)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	tripID, err := parsePathUint(r.PathValue("tripId"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid tripId")
+		return
+	}
+
+	trip, err := h.tripService.GetDriverTripDetail(r.Context(), currentUser.ID, currentUser.Role, tripID)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.Success(w, trip)
+}
+
+func (h *DriverTripHandler) GetDashboard(w http.ResponseWriter, r *http.Request) {
+	currentUser, ok := middleware.CurrentUser(r)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	result, err := h.tripService.GetDriverDashboard(r.Context(), currentUser.ID, currentUser.Role)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.Success(w, result)
+}
+
+func (h *DriverTripHandler) GetIncome(w http.ResponseWriter, r *http.Request) {
+	currentUser, ok := middleware.CurrentUser(r)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	result, err := h.tripService.GetDriverIncome(r.Context(), currentUser.ID, currentUser.Role)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.Success(w, result)
+}
+
+func parseRequiredRFC3339(raw, field string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, &fieldError{Message: field + " is required"}
+	}
+
+	t, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return time.Time{}, &fieldError{Message: field + " must be RFC3339"}
+	}
+	return t, nil
+}
+
+func parseOptionalRFC3339(raw string) (*time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+
+	t, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+func parsePathUint(raw string) (uint, error) {
+	id, err := strconv.ParseUint(strings.TrimSpace(raw), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return uint(id), nil
+}
+
+type fieldError struct {
+	Message string
+}
+
+func (e *fieldError) Error() string {
+	return e.Message
+}

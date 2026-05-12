@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>风险监控 - TripVerse</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="admin">
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a class="brand" href="index.html"><span class="brand-mark">TV</span><span>TripVerse</span></a>
+      <nav class="nav-links">
+        <a data-nav="home" href="index.html">首页</a>
+        <a data-nav="search" href="search.html">购票</a>
+        <a data-nav="orders" href="orders.html">订单</a>
+        <a data-nav="profile" href="profile.html">个人中心</a>
+        <a data-nav="driver" href="driver-dashboard.html">司机端</a>
+        <a data-nav="admin" href="admin-dashboard.html">管理端</a>
+        <a data-nav="ai" href="ai-assistant.html">AI 助手</a>
+      </nav>
+      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+    </div>
+    <div class="mobile-drawer">
+      <div class="container mobile-links">
+        <a data-nav="home" data-nav-close href="index.html">首页</a>
+        <a data-nav="search" data-nav-close href="search.html">购票</a>
+        <a data-nav="orders" data-nav-close href="orders.html">订单</a>
+        <a data-nav="profile" data-nav-close href="profile.html">个人中心</a>
+        <a data-nav="driver" data-nav-close href="driver-dashboard.html">司机端</a>
+        <a data-nav="admin" data-nav-close href="admin-dashboard.html">管理端</a>
+        <a data-nav="ai" data-nav-close href="ai-assistant.html">AI 助手</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="container">
+      <div class="tab-strip">
+        <a href="admin-dashboard.html">后台首页</a>
+        <a href="admin-users.html">用户管理</a>
+        <a href="admin-orders.html">订单管理</a>
+        <a href="admin-tokens.html">Token 管理</a>
+        <a class="is-active" href="admin-risk.html">风险监控</a>
+        <a href="admin-models.html">模型配置</a>
+        <a href="admin-knowledge.html">知识库管理</a>
+        <a href="admin-mcp.html">MCP 工具管理</a>
+      </div>
+
+      <section class="page-hero">
+        <span class="eyebrow">风险监控</span>
+        <h1 class="section-title">API 风险、异常访问与告警中心</h1>
+        <p class="muted">当前版本重点监控 AI 限流触发和 Token 异常激增，并支持管理员确认与关闭告警。</p>
+      </section>
+
+      <section class="split-grid">
+        <article class="panel">
+          <h2 class="subhead">筛选条件</h2>
+          <form class="search-card" data-admin-risk-filter-form>
+            <div class="field span-4">
+              <label>优先级</label>
+              <select name="severity">
+                <option value="">全部</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+              </select>
+            </div>
+            <div class="field span-4">
+              <label>状态</label>
+              <select name="status">
+                <option value="">全部</option>
+                <option value="open">待处理</option>
+                <option value="acknowledged">已确认</option>
+                <option value="resolved">已解决</option>
+              </select>
+            </div>
+            <div class="field span-4">
+              <label>时间范围</label>
+              <select name="days">
+                <option value="7">近 7 天</option>
+                <option value="30" selected>近 30 天</option>
+                <option value="90">近 90 天</option>
+              </select>
+            </div>
+            <div class="button-row">
+              <button class="button button-primary" type="submit">查询风险事件</button>
+            </div>
+          </form>
+
+          <div class="section-block">
+            <h2 class="subhead">风险总览</h2>
+            <div class="list-stack" data-admin-risk-summary>
+              <div class="info-card">
+                <strong>正在加载</strong>
+                <p class="muted">正在统计当前时间范围内的风险事件。</p>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <aside class="panel">
+          <h2 class="subhead">风险事件列表</h2>
+          <div class="list-stack" data-admin-risk-list>
+            <div class="info-card">
+              <strong>等待加载</strong>
+              <p class="muted">这里会显示 AI 限流和 Token 异常告警的详细事件。</p>
+            </div>
+          </div>
+        </aside>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-card">风险监控页后续还可以继续接入退款风控、支付失败率、知识检索质量和通知推送。</div>
+  </footer>
+  <script src="assets/runtime-config.js?v=20260501-frontend-link"></script>
+  <script src="assets/app.js?v=20260501-frontend-link"></script>
+</body>
+</html>

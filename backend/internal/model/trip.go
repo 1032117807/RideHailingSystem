@@ -1,0 +1,34 @@
+package model
+
+import (
+	"time"
+)
+
+const (
+	TripStatusDraft     = "draft"
+	TripStatusPublished = "published"
+	TripStatusClosed    = "closed"
+
+	VehicleTypeCar = "car"
+)
+
+type Trip struct {
+	ID            uint       `gorm:"primaryKey" json:"id"`
+	DriverID      uint       `gorm:"not null;index:idx_driver_status,priority:1" json:"driverId"`
+	VehicleType   string     `gorm:"size:20;not null;default:car" json:"vehicleType"`
+	StartCity     string     `gorm:"size:50;not null;index:idx_trip_search,priority:1" json:"startCity"`
+	EndCity       string     `gorm:"size:50;not null;index:idx_trip_search,priority:2" json:"endCity"`
+	DepartureTime time.Time  `gorm:"not null;index:idx_trip_search,priority:3" json:"departureTime"`
+	ArrivalTime   time.Time  `gorm:"not null" json:"arrivalTime"`
+	SeatTotal     int        `gorm:"not null" json:"seatTotal"`
+	SeatAvailable int        `gorm:"not null" json:"seatAvailable"`
+	PriceCent     int        `gorm:"not null" json:"priceCent"`
+	Status        string     `gorm:"size:20;not null;default:published;index:idx_trip_search,priority:4;index:idx_driver_status,priority:2" json:"status"`
+	Stops         []TripStop `gorm:"foreignKey:TripID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"stops,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
+}
+
+func (Trip) TableName() string {
+	return "trips"
+}

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理后台首页 - TripVerse</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="admin">
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a class="brand" href="index.html"><span class="brand-mark">TV</span><span>TripVerse</span></a>
+      <nav class="nav-links"></nav>
+      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+    </div>
+    <div class="mobile-drawer">
+      <div class="container mobile-links"></div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="container">
+      <div class="tab-strip">
+        <a class="is-active" href="admin-dashboard.html">后台首页</a>
+        <a href="admin-users.html">用户管理</a>
+        <a href="admin-orders.html">订单管理</a>
+        <a href="admin-tokens.html">Token 管理</a>
+        <a href="admin-risk.html">风控监控</a>
+        <a href="admin-models.html">模型配置</a>
+        <a href="admin-knowledge.html">知识库管理</a>
+        <a href="admin-mcp.html">MCP 工具管理</a>
+      </div>
+
+      <section class="page-hero">
+        <div class="row-between">
+          <div>
+            <span class="eyebrow">管理后台 / 大盘</span>
+            <h1 class="section-title">用户规模与退款待办总览</h1>
+            <p class="muted">首页直接读取后端聚合统计，展示用户规模、账号健康度以及退款处理情况，不再依赖静态演示数据。</p>
+          </div>
+          <div class="chip-row" data-admin-dashboard-summary>
+            <span class="mini-chip">加载中...</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="stat-grid">
+        <article class="stat-card">
+          <div class="stat-label">总用户数</div>
+          <div class="stat-value" data-admin-dashboard-total-users>--</div>
+          <div class="stat-delta">平台累计注册账号</div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-label">活跃用户</div>
+          <div class="stat-value" data-admin-dashboard-active-users>--</div>
+          <div class="stat-delta">当前可正常登录账号</div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-label">待审核退款</div>
+          <div class="stat-value" data-admin-dashboard-pending-refund>--</div>
+          <div class="stat-delta">当前需要处理的退款申请</div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-label">已退款 / 已驳回</div>
+          <div class="stat-value"><span data-admin-dashboard-refunded>--</span> / <span data-admin-dashboard-rejected>--</span></div>
+          <div class="stat-delta">历史退款审核结果</div>
+        </article>
+      </section>
+
+      <section class="dashboard-grid section-block">
+        <article class="panel">
+          <h2 class="subhead">角色分布</h2>
+          <div class="list-stack section-block">
+            <div class="list-item">
+              <strong>乘客</strong>
+              <div class="list-meta">
+                <span>主要下单用户</span>
+                <span data-admin-dashboard-passenger-count>--</span>
+              </div>
+            </div>
+            <div class="list-item">
+              <strong>司机</strong>
+              <div class="list-meta">
+                <span>已发布或可发布行程的用户</span>
+                <span data-admin-dashboard-driver-count>--</span>
+              </div>
+            </div>
+            <div class="list-item">
+              <strong>管理员</strong>
+              <div class="list-meta">
+                <span>负责平台运营与审核</span>
+                <span data-admin-dashboard-admin-count>--</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <aside class="panel">
+          <h2 class="subhead">处理建议</h2>
+          <div class="button-row section-block">
+            <a class="button button-dark" href="admin-orders.html">进入退款审核页</a>
+            <a class="button button-secondary" href="admin-users.html">查看用户列表</a>
+          </div>
+          <div class="info-card" data-admin-dashboard-empty-state>
+            <strong>等待加载</strong>
+            <p class="muted">正在汇总用户规模、账号状态与退款待办信息。</p>
+          </div>
+          <p class="muted" data-admin-dashboard-pending-note>待加载...</p>
+        </aside>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-card">后台首页现已接入后端聚合统计，统一展示用户规模、实名情况、账号状态与退款处理数据。</div>
+  </footer>
+
+  <script src="assets/runtime-config.js?v=20260507-admin-dashboard-v3"></script>
+  <script src="assets/app.js?v=20260507-admin-dashboard-v3"></script>
+</body>
+</html>

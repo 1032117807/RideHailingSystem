@@ -1,0 +1,118 @@
+package router
+
+import (
+	"log"
+	"net/http"
+
+	"ridehailing/backend/internal/handler"
+	"ridehailing/backend/internal/pkg/response"
+)
+
+type Dependencies struct {
+	AuthHandler    *handler.AuthHandler
+	UserHandler    *handler.UserHandler
+	DriverTripHandler *handler.DriverTripHandler
+	TicketHandler *handler.TicketHandler
+	AuthMiddleware func(http.Handler) http.Handler
+}
+
+func NewRouter(dep Dependencies) http.Handler {
+	mux := http.NewServeMux()
+
+	mount(mux, "/api/auth/email/send", map[string]http.Handler{
+		http.MethodPost: http.HandlerFunc(dep.AuthHandler.SendEmailCode),
+	})
+	mount(mux, "/api/auth/register", map[string]http.Handler{
+		http.MethodPost: http.HandlerFunc(dep.AuthHandler.Register),
+	})
+	mount(mux, "/api/auth/login/password", map[string]http.Handler{
+		http.MethodPost: http.HandlerFunc(dep.AuthHandler.LoginByPassword),
+	})
+	mount(mux, "/api/auth/login/code", map[string]http.Handler{
+		http.MethodPost: http.HandlerFunc(dep.AuthHandler.LoginByCode),
+	})
+
+	mount(mux, "/api/auth/logout", map[string]http.Handler{
+		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.AuthHandler.Logout)),
+	})
+	mount(mux, "/api/auth/me", map[string]http.Handler{
+		http.MethodGet: dep.AuthMiddleware(http.HandlerFunc(dep.AuthHandler.Me)),
+	})
+
+	mount(mux, "/api/users/profile", map[string]http.Handler{
+		http.MethodGet: dep.AuthMiddleware(http.HandlerFunc(dep.UserHandler.GetProfile)),
+		http.MethodPut: dep.AuthMiddleware(http.HandlerFunc(dep.UserHandler.UpdateProfile)),
+	})
+	mount(mux, "/api/users/verify-real-name", map[string]http.Handler{
+		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.UserHandler.VerifyRealName)),
+	})
+	mount(mux, "/api/users/switch-role", map[string]http.Handler{
+		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.UserHandler.SwitchRole)),
+	})
+	mount(mux, "/api/users/account/status", map[string]http.Handler{
+		http.MethodGet: dep.AuthMiddleware(http.HandlerFunc(dep.UserHandler.GetAccountStatus)),
+	})
+
+	mount(mux,  "/api/driver/trips", map[string]http.Handler{
+		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.DriverTripHandler.CreateTrip)),
+		http.MethodGet:  dep.AuthMiddleware(http.HandlerFunc(dep.DriverTripHandler.ListTrips)),
+	})
+
+	mount(mux, "/api/driver/trips/{tripId}", map[string]http.Handler{
+		http.MethodGet: dep.AuthMiddleware(http.HandlerFunc(dep.DriverTripHandler.GetTripDetail)),
+	})
+
+	mount(mux, "/api/tickets/search", map[string]http.Handler{
+		http.MethodGet: http.HandlerFunc(dep.TicketHandler.Search),
+	})
+
+	mount(mux, "/api/tickets/{ticketId}", map[string]http.Handler{
+		http.MethodGet: http.HandlerFunc(dep.TicketHandler.Detail),
+	})
+
+
+	return withRecovery(withCORS(mux))
+}
+
+func mount(mux *http.ServeMux, path string, handlers map[string]http.Handler) {
+	mux.Handle(path, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		h, ok := handlers[r.Method]
+		if !ok {
+			response.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		h.ServeHTTP(w, r)
+	}))
+}
+
+func withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func withRecovery(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.Printf("panic recovered: %v", rec)
+				response.Error(w, http.StatusInternalServerError, "internal server error")
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}

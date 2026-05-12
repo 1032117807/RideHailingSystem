@@ -1,0 +1,5 @@
+2026/04/30 20:33:18 server listening on :8080
+2026/04/30 20:33:40 [mailer] send verification code: email=1032117807@qq.com scene=register code=584311
+2026/04/30 20:59:53 [mailer] send verification code: email=1032117807@qq.com scene=register code=721253
+2026/04/30 20:59:56 [mailer] send verification code: email=1032117807@qq.com scene=register code=934711
+exit status 0xffffffff

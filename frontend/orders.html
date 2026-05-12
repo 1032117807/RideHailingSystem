@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的订单 - TripVerse</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="orders">
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a class="brand" href="index.html"><span class="brand-mark">TV</span><span>TripVerse</span></a>
+      <nav class="nav-links"></nav>
+      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+    </div>
+    <div class="mobile-drawer">
+      <div class="container mobile-links"></div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="container">
+      <section class="page-hero">
+        <div class="row-between">
+          <div>
+            <span class="eyebrow">我的订单</span>
+            <h1 class="section-title">近期行程与订单状态</h1>
+          </div>
+          <div class="chip-row" data-order-summary style="display:none"></div>
+        </div>
+      </section>
+
+      <div class="list-stack" data-order-list>
+        <div class="info-card">
+          <strong>正在加载订单...</strong>
+          <p class="muted">正在从后端同步你的订单数据。</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-card">订单页只展示真实后端数据；没有订单时会直接显示空状态。</div>
+  </footer>
+  <script src="assets/runtime-config.js?v=20260507-payment-expire"></script>
+  <script src="assets/app.js?v=20260507-payment-expire"></script>
+</body>
+</html>

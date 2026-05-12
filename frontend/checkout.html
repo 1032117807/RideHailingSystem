@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>下单确认 - TripVerse</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="search">
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a class="brand" href="index.html"><span class="brand-mark">TV</span><span>TripVerse</span></a>
+      <nav class="nav-links">
+        <a data-nav="home" href="index.html">首页</a>
+        <a data-nav="search" href="search.html">购票</a>
+        <a data-nav="orders" href="orders.html">订单</a>
+        <a data-nav="profile" href="profile.html">个人中心</a>
+        <a data-nav="ai" href="ai-assistant.html">AI 助手</a>
+      </nav>
+      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+    </div>
+    <div class="mobile-drawer">
+      <div class="container mobile-links">
+        <a data-nav="home" data-nav-close href="index.html">首页</a>
+        <a data-nav="search" data-nav-close href="search.html">购票</a>
+        <a data-nav="orders" data-nav-close href="orders.html">订单</a>
+        <a data-nav="profile" data-nav-close href="profile.html">个人中心</a>
+        <a data-nav="ai" data-nav-close href="ai-assistant.html">AI 助手</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="container">
+      <div class="tab-strip">
+        <a href="search.html">票务搜索</a>
+        <a href="trip-detail.html" data-checkout-trip-link>班次详情</a>
+        <a class="is-active" href="checkout.html">下单确认</a>
+        <a href="payment.html">支付页</a>
+      </div>
+
+      <section class="page-hero">
+        <div class="row-between">
+          <div>
+            <span class="eyebrow">下单确认</span>
+            <h1 class="section-title" data-checkout-title>订单加载中...</h1>
+            <p class="muted" data-checkout-lede>正在读取班次信息并准备创建订单。</p>
+          </div>
+          <a class="button button-secondary" href="trip-detail.html" data-checkout-back-link>返回班次详情</a>
+        </div>
+      </section>
+
+      <section class="split-grid">
+        <article class="panel">
+          <div class="form-grid">
+            <div class="field span-6">
+              <label for="checkout-passenger-name">乘车人姓名</label>
+              <input id="checkout-passenger-name" name="passengerName" type="text" placeholder="请输入乘车人姓名">
+            </div>
+            <div class="field span-6">
+              <label for="checkout-id-card">身份证号</label>
+              <input id="checkout-id-card" name="idCard" type="text" placeholder="请输入身份证号">
+            </div>
+            <div class="field span-6">
+              <label for="checkout-phone">手机号</label>
+              <input id="checkout-phone" name="phone" type="tel" placeholder="请输入手机号">
+            </div>
+            <div class="field span-6">
+              <label for="checkout-seat-type">座位类型</label>
+              <select id="checkout-seat-type" name="seatType" data-seat-type>
+                <option value="standard" data-multiplier="1">标准座</option>
+              </select>
+            </div>
+            <div class="field span-6">
+              <label for="checkout-ticket-count">购票数量</label>
+              <input id="checkout-ticket-count" name="ticketCount" type="number" min="1" max="5" value="1" data-ticket-count>
+            </div>
+            <div class="field span-6">
+              <label for="checkout-remark">联系人备注</label>
+              <input id="checkout-remark" name="remark" type="text" placeholder="如有接送、行李等备注可填写">
+            </div>
+            <div class="field span-12">
+              <label for="checkout-note">附加说明</label>
+              <textarea id="checkout-note" name="note" placeholder="当前 MVP 版本只会创建真实订单，不会把乘车人信息写入订单表。"></textarea>
+            </div>
+          </div>
+        </article>
+
+        <aside class="panel">
+          <h2 class="subhead">订单摘要</h2>
+          <div class="pricing-box section-block">
+            <div class="pricing-row">
+              <span>班次</span>
+              <strong data-checkout-route>--</strong>
+            </div>
+            <div class="pricing-row">
+              <span>基础票价</span>
+              <strong data-base-price data-checkout-base-price data-base-price="0">￥0</strong>
+            </div>
+            <div class="pricing-row">
+              <span>预计出发</span>
+              <strong data-checkout-departure>--</strong>
+            </div>
+            <div class="pricing-row">
+              <span>剩余座位</span>
+              <strong data-checkout-seat-available>--</strong>
+            </div>
+            <div class="pricing-row pricing-total">
+              <span>应付总额</span>
+              <strong data-total-output>￥0</strong>
+            </div>
+          </div>
+          <div class="button-row section-block" data-checkout-actions>
+            <button class="button button-primary" type="button" data-submit-order>提交订单并去支付</button>
+            <button class="button button-ghost" type="button" data-save-draft>保存草稿</button>
+          </div>
+        </aside>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-card">下单确认页会调用真实下单接口，并带着返回的订单号跳转到支付页。</div>
+  </footer>
+  <script src="assets/runtime-config.js?v=20260506-checkout-flow"></script>
+  <script src="assets/app.js?v=20260506-checkout-flow"></script>
+</body>
+</html>

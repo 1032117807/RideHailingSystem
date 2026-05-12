@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TripVerse 买车票平台</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="home">
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a class="brand" href="index.html">
+        <span class="brand-mark">TV</span>
+        <span>TripVerse</span>
+      </a>
+      <nav class="nav-links">
+        <a data-nav="home" href="index.html">首页</a>
+        <a data-nav="search" href="search.html">购票</a>
+        <a data-nav="orders" href="orders.html">订单</a>
+        <a data-nav="profile" href="profile.html">个人中心</a>
+        <a data-nav="driver" href="driver-dashboard.html">司机端</a>
+        <a data-nav="admin" href="admin-dashboard.html">管理端</a>
+        <a data-nav="ai" href="ai-assistant.html">AI 助手</a>
+      </nav>
+      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+    </div>
+    <div class="mobile-drawer">
+      <div class="container mobile-links">
+        <a data-nav="home" data-nav-close href="index.html">首页</a>
+        <a data-nav="search" data-nav-close href="search.html">购票</a>
+        <a data-nav="orders" data-nav-close href="orders.html">订单</a>
+        <a data-nav="profile" data-nav-close href="profile.html">个人中心</a>
+        <a data-nav="driver" data-nav-close href="driver-dashboard.html">司机端</a>
+        <a data-nav="admin" data-nav-close href="admin-dashboard.html">管理端</a>
+        <a data-nav="ai" data-nav-close href="ai-assistant.html">AI 助手</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="page-hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <span class="eyebrow">一站式票务平台</span>
+          <h1 class="headline">从城市通勤到跨城出行，一次搜索就能安排清楚。</h1>
+          <p class="lede">
+            支持汽车、火车、飞机、高铁、公交等多种出行方式，乘客端、司机端、管理后台和 AI 助手统一协同，适配手机和网页。
+          </p>
+          <div class="actions">
+            <a class="button button-primary" href="search.html">立即购票</a>
+            <a class="button button-secondary" href="ai-assistant.html">体验 AI 助手</a>
+          </div>
+        </div>
+
+        <aside class="hero-panel">
+          <div class="search-card">
+            <h2 class="subhead">快速搜索</h2>
+            <div class="form-grid">
+              <div class="field span-6">
+                <label>出发地</label>
+                <input type="text" value="杭州">
+              </div>
+              <div class="field span-6">
+                <label>目的地</label>
+                <input type="text" value="苏州">
+              </div>
+              <div class="field span-6">
+                <label>日期</label>
+                <input type="date" value="2026-04-24">
+              </div>
+              <div class="field span-6">
+                <label>出行方式</label>
+                <select>
+                  <option>高铁优先</option>
+                  <option>汽车优先</option>
+                  <option>最省钱</option>
+                  <option>最快到达</option>
+                </select>
+              </div>
+            </div>
+            <a class="button button-dark" href="search.html">查看班次</a>
+            <div class="chip-row">
+              <span class="tag">低价提醒</span>
+              <span class="tag">AI 方案推荐</span>
+              <span class="tag">电子票秒开</span>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section-block">
+      <div class="container">
+        <div class="row-between">
+          <div>
+            <span class="eyebrow">核心能力</span>
+            <h2 class="section-title">一套前端覆盖三类用户</h2>
+          </div>
+          <div class="chip-row">
+            <span class="mini-chip">响应式布局</span>
+            <span class="mini-chip">统一设计系统</span>
+          </div>
+        </div>
+        <div class="card-grid section-block">
+          <article class="panel">
+            <span class="badge">乘客端</span>
+            <h3 class="subhead">查询、购票、支付、订单全流程</h3>
+            <p class="lede">从首页搜索到订单详情、电子票、AI 推荐、个人中心全部打通，适合先做 MVP 演示和后续接接口。</p>
+            <a class="button button-ghost" href="orders.html">查看乘客页面</a>
+          </article>
+          <article class="panel">
+            <span class="badge">司机端</span>
+            <h3 class="subhead">班次发布与收益管理</h3>
+            <p class="lede">支持班次发布、管理、详情、收益分析和 AI 辅助发车，手机端可以快速处理日常运力操作。</p>
+            <a class="button button-ghost" href="driver-dashboard.html">查看司机页面</a>
+          </article>
+          <article class="panel">
+            <span class="badge">管理后台</span>
+            <h3 class="subhead">用户、订单、风控与模型治理</h3>
+            <p class="lede">后台含大盘、用户管理、订单处理、Token 配额、风险监控、知识库和 MCP 工具管理。</p>
+            <a class="button button-ghost" href="admin-dashboard.html">查看后台页面</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-block">
+      <div class="container stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">今日搜索量</div>
+          <div class="stat-value">82,640</div>
+          <div class="stat-delta">较昨日 +12%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">订单支付成功率</div>
+          <div class="stat-value">98.4%</div>
+          <div class="stat-delta">支付链路稳定</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">AI 查询响应</div>
+          <div class="stat-value">1.6s</div>
+          <div class="stat-delta">命中缓存 41%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">移动端访问占比</div>
+          <div class="stat-value">67%</div>
+          <div class="stat-delta">移动优先设计</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-block">
+      <div class="container split-grid">
+        <article class="panel">
+          <span class="eyebrow">热门路线</span>
+          <div class="list-stack section-block">
+            <div class="list-item">
+              <strong>杭州东 → 上海虹桥</strong>
+              <div class="list-meta">
+                <span>高铁 58 分钟</span>
+                <span>¥73 起</span>
+                <span>余票充足</span>
+              </div>
+            </div>
+            <div class="list-item">
+              <strong>苏州北 → 南京南</strong>
+              <div class="list-meta">
+                <span>城际 1 小时 12 分</span>
+                <span>¥89 起</span>
+                <span>晚高峰推荐</span>
+              </div>
+            </div>
+            <div class="list-item">
+              <strong>杭州汽车南站 → 黄山风景区</strong>
+              <div class="list-meta">
+                <span>大巴 3 小时 45 分</span>
+                <span>¥128 起</span>
+                <span>支持电子票</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <span class="eyebrow">AI 工作流</span>
+          <div class="timeline section-block">
+            <div class="timeline-item">
+              <span class="timeline-dot"></span>
+              <strong>自然语言解析</strong>
+              <p class="lede">识别“今晚最便宜到苏州”“明早到机场最快方案”这类口语条件。</p>
+            </div>
+            <div class="timeline-item">
+              <span class="timeline-dot"></span>
+              <strong>RAG 规则召回</strong>
+              <p class="lede">自动结合退改签规则、乘车政策、城市站点信息一起回答。</p>
+            </div>
+            <div class="timeline-item">
+              <span class="timeline-dot"></span>
+              <strong>生成推荐结果</strong>
+              <p class="lede">输出最优路线、价格建议、时间提醒，并联动创建订单草稿。</p>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-card">TripVerse 前端原型已覆盖手机端和桌面端布局，可继续接后端接口或迁移到 Vue / React。</div>
+  </footer>
+  <script src="assets/runtime-config.js?v=20260501-frontend-link"></script>
+  <script src="assets/app.js?v=20260501-frontend-link"></script>
+</body>
+</html>

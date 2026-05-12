@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>班次详情 - TripVerse</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="search">
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a class="brand" href="index.html"><span class="brand-mark">TV</span><span>TripVerse</span></a>
+      <nav class="nav-links">
+        <a data-nav="home" href="index.html">首页</a>
+        <a data-nav="search" href="search.html">购票</a>
+        <a data-nav="orders" href="orders.html">订单</a>
+        <a data-nav="profile" href="profile.html">个人中心</a>
+        <a data-nav="ai" href="ai-assistant.html">AI 助手</a>
+      </nav>
+      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+    </div>
+    <div class="mobile-drawer">
+      <div class="container mobile-links">
+        <a data-nav="home" data-nav-close href="index.html">首页</a>
+        <a data-nav="search" data-nav-close href="search.html">购票</a>
+        <a data-nav="orders" data-nav-close href="orders.html">订单</a>
+        <a data-nav="profile" data-nav-close href="profile.html">个人中心</a>
+        <a data-nav="ai" data-nav-close href="ai-assistant.html">AI 助手</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="container">
+      <div class="tab-strip">
+        <a href="search.html">票务搜索</a>
+        <a class="is-active" href="trip-detail.html">班次详情</a>
+        <a href="checkout.html" data-ticket-detail-checkout-tab>下单确认</a>
+        <a href="payment.html">支付页</a>
+      </div>
+
+      <section class="hero-grid page-hero">
+        <div class="hero-copy">
+          <span class="eyebrow">班次详情</span>
+          <h1 class="section-title" data-ticket-detail-title>班次加载中...</h1>
+          <div class="route-line section-block" data-ticket-detail-route>
+            <span class="route-city">正在读取发车时间</span>
+            <span class="route-divider"></span>
+            <span class="route-city">正在读取到达时间</span>
+          </div>
+          <div class="chip-row section-block" data-ticket-detail-tags>
+            <span class="tag">正在读取价格</span>
+          </div>
+          <div class="button-row section-block">
+            <a class="button button-primary" href="checkout.html" data-ticket-detail-checkout-link>去下单</a>
+            <a class="button button-secondary" href="search.html">返回搜索</a>
+          </div>
+        </div>
+
+        <aside class="hero-panel">
+          <div class="pricing-box">
+            <div class="pricing-row"><span>当前票价</span><strong data-ticket-detail-price>--</strong></div>
+            <div class="pricing-row"><span>剩余座位</span><strong data-ticket-detail-seat>--</strong></div>
+            <div class="pricing-row"><span>班次状态</span><strong data-ticket-detail-status>--</strong></div>
+            <div class="pricing-row pricing-total"><span>下单提示</span><strong>确认后将创建真实订单</strong></div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="split-grid">
+        <article class="panel">
+          <h2 class="subhead">途经站点</h2>
+          <div class="timeline section-block" data-ticket-detail-stops>
+            <div class="timeline-item">
+              <span class="timeline-dot"></span>
+              <strong>正在读取站点信息</strong>
+              <p class="muted">请稍候...</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <h2 class="subhead">购票说明</h2>
+          <p class="muted">当前 MVP 已接通真实下单和支付链路。进入下单确认页后，会创建真实订单并带着订单号进入支付页。</p>
+          <div class="info-card section-block">
+            <strong>当前能力</strong>
+            <p class="muted">支持查看班次、创建订单、模拟支付、查看订单详情。</p>
+          </div>
+        </article>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-card">班次详情页已与后端票务详情接口联通。</div>
+  </footer>
+  <script src="assets/runtime-config.js?v=20260506-checkout-flow"></script>
+  <script src="assets/app.js?v=20260506-checkout-flow"></script>
+</body>
+</html>

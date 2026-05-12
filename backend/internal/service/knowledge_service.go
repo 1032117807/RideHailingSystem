@@ -1,0 +1,1225 @@
+package service
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"math"
+	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"ridehailing/backend/internal/model"
+)
+
+type KnowledgeService struct {
+	memoryDir         string
+	documentsDir      string
+	embeddingAPIKey   string
+	embeddingBaseURL  string
+	embeddingModel    string
+	rerankAPIKey      string
+	rerankBaseURL     string
+	rerankModel       string
+	tokenUsageService *TokenUsageService
+	chunkSize         int
+	chunkOverlap      int
+	recallLimit       int
+	topK              int
+	httpClient        *http.Client
+}
+
+type UploadKnowledgeInput struct {
+	Title      string
+	Category   string
+	SourceName string
+	Content    string
+	CreatedBy  uint
+}
+
+type UpdateKnowledgeDocumentInput struct {
+	Title    string
+	Category string
+	Content  string
+	Status   string
+}
+
+type SearchKnowledgeInput struct {
+	Query    string
+	TopK     int
+	Category string
+	UserID   uint
+	Role     string
+	Feature  string
+}
+
+type KnowledgeDocumentSummary struct {
+	ID         string    `json:"id"`
+	Title      string    `json:"title"`
+	Category   string    `json:"category"`
+	SourceName string    `json:"sourceName"`
+	Status     string    `json:"status"`
+	ChunkCount int       `json:"chunkCount"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+}
+
+type KnowledgeSearchResult struct {
+	DocumentID   string  `json:"documentId"`
+	ChunkID      string  `json:"chunkId"`
+	Title        string  `json:"title"`
+	SectionPath  string  `json:"sectionPath"`
+	Content      string  `json:"content"`
+	VectorScore  float64 `json:"vectorScore"`
+	BM25Score    float64 `json:"bm25Score"`
+	KeywordScore float64 `json:"keywordScore"`
+	HybridScore  float64 `json:"hybridScore"`
+	RerankScore  float64 `json:"rerankScore"`
+	FinalScore   float64 `json:"finalScore"`
+	HitCount     int     `json:"hitCount"`
+	LastHitAt    string  `json:"lastHitAt,omitempty"`
+}
+
+type KnowledgeChunkView struct {
+	ID            string `json:"id"`
+	ChunkIndex    int    `json:"chunkIndex"`
+	Title         string `json:"title"`
+	SectionPath   string `json:"sectionPath"`
+	Content       string `json:"content"`
+	TokenEstimate int    `json:"tokenEstimate"`
+	EmbeddingDim  int    `json:"embeddingDim"`
+	HitCount      int    `json:"hitCount"`
+	LastHitAt     string `json:"lastHitAt,omitempty"`
+}
+
+type KnowledgeDocumentDetail struct {
+	ID         string               `json:"id"`
+	Title      string               `json:"title"`
+	Category   string               `json:"category"`
+	SourceName string               `json:"sourceName"`
+	Status     string               `json:"status"`
+	Content    string               `json:"content"`
+	ChunkCount int                  `json:"chunkCount"`
+	CreatedBy  uint                 `json:"createdBy"`
+	CreatedAt  time.Time            `json:"createdAt"`
+	UpdatedAt  time.Time            `json:"updatedAt"`
+	Chunks     []KnowledgeChunkView `json:"chunks"`
+}
+
+type storedKnowledgeDocument struct {
+	ID          string                 `json:"id"`
+	Title       string                 `json:"title"`
+	Category    string                 `json:"category"`
+	SourceName  string                 `json:"sourceName"`
+	ContentType string                 `json:"contentType"`
+	Status      string                 `json:"status"`
+	Content     string                 `json:"content"`
+	ChunkCount  int                    `json:"chunkCount"`
+	CreatedBy   uint                   `json:"createdBy"`
+	CreatedAt   time.Time              `json:"createdAt"`
+	UpdatedAt   time.Time              `json:"updatedAt"`
+	Chunks      []storedKnowledgeChunk `json:"chunks"`
+}
+
+type storedKnowledgeChunk struct {
+	ID            string    `json:"id"`
+	DocumentID    string    `json:"documentId"`
+	ChunkIndex    int       `json:"chunkIndex"`
+	Title         string    `json:"title"`
+	SectionPath   string    `json:"sectionPath"`
+	Content       string    `json:"content"`
+	KeywordText   string    `json:"keywordText"`
+	TokenEstimate int       `json:"tokenEstimate"`
+	Embedding     []float64 `json:"embedding"`
+	HitCount      int       `json:"hitCount"`
+	LastHitAt     time.Time `json:"lastHitAt,omitempty"`
+}
+
+type chunkItem struct {
+	Title       string
+	SectionPath string
+	Content     string
+}
+
+type bm25Doc struct {
+	ID      string
+	Content string
+	Terms   []string
+	Length  int
+}
+
+type bm25Corpus struct {
+	Docs      []bm25Doc
+	DocCount  int
+	AvgDocLen float64
+	DocFreq   map[string]int
+}
+
+func NewKnowledgeService(
+	memoryDir string,
+	embeddingAPIKey string,
+	embeddingBaseURL string,
+	embeddingModel string,
+	rerankAPIKey string,
+	rerankBaseURL string,
+	rerankModel string,
+	tokenUsageService *TokenUsageService,
+	chunkSize int,
+	chunkOverlap int,
+	recallLimit int,
+	topK int,
+) *KnowledgeService {
+	memoryDir = strings.TrimSpace(memoryDir)
+	if memoryDir == "" {
+		memoryDir = filepath.Join("backend", "memory")
+	}
+
+	embeddingBaseURL = strings.TrimRight(strings.TrimSpace(embeddingBaseURL), "/")
+	if embeddingBaseURL == "" {
+		embeddingBaseURL = "https://api.openai.com/v1"
+	}
+	if strings.TrimSpace(embeddingModel) == "" {
+		embeddingModel = "text-embedding-3-small"
+	}
+
+	rerankBaseURL = strings.TrimRight(strings.TrimSpace(rerankBaseURL), "/")
+	if rerankBaseURL == "" {
+		rerankBaseURL = embeddingBaseURL
+	}
+	if strings.TrimSpace(rerankModel) == "" {
+		rerankModel = "rerank-v1"
+	}
+
+	if chunkSize <= 0 {
+		chunkSize = 500
+	}
+	if chunkOverlap < 0 {
+		chunkOverlap = 80
+	}
+	if recallLimit <= 0 {
+		recallLimit = 60
+	}
+	if topK <= 0 {
+		topK = 4
+	}
+
+	service := &KnowledgeService{
+		memoryDir:         memoryDir,
+		documentsDir:      filepath.Join(memoryDir, "documents"),
+		embeddingAPIKey:   strings.TrimSpace(embeddingAPIKey),
+		embeddingBaseURL:  embeddingBaseURL,
+		embeddingModel:    strings.TrimSpace(embeddingModel),
+		rerankAPIKey:      strings.TrimSpace(rerankAPIKey),
+		rerankBaseURL:     rerankBaseURL,
+		rerankModel:       strings.TrimSpace(rerankModel),
+		tokenUsageService: tokenUsageService,
+		chunkSize:         chunkSize,
+		chunkOverlap:      chunkOverlap,
+		recallLimit:       recallLimit,
+		topK:              topK,
+		httpClient:        &http.Client{Timeout: 30 * time.Second},
+	}
+	_ = service.ensureStorageDirs()
+	return service
+}
+
+func (s *KnowledgeService) UploadDocument(ctx context.Context, input UploadKnowledgeInput) (*KnowledgeDocumentSummary, error) {
+	input.Title = strings.TrimSpace(input.Title)
+	input.Category = strings.TrimSpace(input.Category)
+	input.SourceName = strings.TrimSpace(input.SourceName)
+	input.Content = normalizeKnowledgeContent(input.Content)
+
+	if input.Title == "" {
+		return nil, errors.New("title is required")
+	}
+	if input.Category == "" {
+		return nil, errors.New("category is required")
+	}
+	if input.SourceName == "" {
+		return nil, errors.New("sourceName is required")
+	}
+	if input.Content == "" {
+		return nil, errors.New("content is required")
+	}
+	if s.embeddingAPIKey == "" {
+		return nil, errors.New("EMBEDDING_API_KEY is not configured")
+	}
+	if err := s.ensureStorageDirs(); err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	documentID := "doc_" + now.Format("20060102150405") + "_" + randomKnowledgeSuffix()
+	chunkDefs := splitMarkdownIntoChunks(input.Title, input.Content, s.chunkSize, s.chunkOverlap)
+	if len(chunkDefs) == 0 {
+		return nil, errors.New("no chunks generated")
+	}
+
+	chunks := make([]storedKnowledgeChunk, 0, len(chunkDefs))
+	for index, chunkDef := range chunkDefs {
+		embedding, err := s.embedText(ctx, input.CreatedBy, model.RoleAdmin, model.TokenFeatureKnowledgeIngest, chunkDef.Content)
+		if err != nil {
+			return nil, err
+		}
+		chunks = append(chunks, storedKnowledgeChunk{
+			ID:            fmt.Sprintf("%s_chunk_%03d", documentID, index+1),
+			DocumentID:    documentID,
+			ChunkIndex:    index,
+			Title:         chunkDef.Title,
+			SectionPath:   chunkDef.SectionPath,
+			Content:       chunkDef.Content,
+			KeywordText:   buildKeywordText(chunkDef.Title, chunkDef.SectionPath, chunkDef.Content),
+			TokenEstimate: estimateTokenCount(chunkDef.Content),
+			Embedding:     embedding,
+		})
+	}
+
+	document := storedKnowledgeDocument{
+		ID:          documentID,
+		Title:       input.Title,
+		Category:    input.Category,
+		SourceName:  input.SourceName,
+		ContentType: detectKnowledgeContentType(input.SourceName),
+		Status:      "active",
+		Content:     input.Content,
+		ChunkCount:  len(chunks),
+		CreatedBy:   input.CreatedBy,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		Chunks:      chunks,
+	}
+
+	if err := s.saveDocument(document); err != nil {
+		return nil, err
+	}
+
+	return &KnowledgeDocumentSummary{
+		ID:         document.ID,
+		Title:      document.Title,
+		Category:   document.Category,
+		SourceName: document.SourceName,
+		Status:     document.Status,
+		ChunkCount: document.ChunkCount,
+		CreatedAt:  document.CreatedAt,
+		UpdatedAt:  document.UpdatedAt,
+	}, nil
+}
+
+func (s *KnowledgeService) ListDocuments(ctx context.Context, category string) ([]*KnowledgeDocumentSummary, error) {
+	_ = ctx
+	docs, err := s.loadAllDocuments()
+	if err != nil {
+		return nil, err
+	}
+
+	category = strings.TrimSpace(category)
+	result := make([]*KnowledgeDocumentSummary, 0, len(docs))
+	for _, doc := range docs {
+		if category != "" && doc.Category != category {
+			continue
+		}
+		result = append(result, &KnowledgeDocumentSummary{
+			ID:         doc.ID,
+			Title:      doc.Title,
+			Category:   doc.Category,
+			SourceName: doc.SourceName,
+			Status:     doc.Status,
+			ChunkCount: doc.ChunkCount,
+			CreatedAt:  doc.CreatedAt,
+			UpdatedAt:  doc.UpdatedAt,
+		})
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].CreatedAt.After(result[j].CreatedAt)
+	})
+	return result, nil
+}
+
+func (s *KnowledgeService) GetDocument(ctx context.Context, documentID string) (*KnowledgeDocumentDetail, error) {
+	_ = ctx
+	doc, err := s.loadDocument(documentID)
+	if err != nil {
+		return nil, err
+	}
+
+	chunks := make([]KnowledgeChunkView, 0, len(doc.Chunks))
+	for _, chunk := range doc.Chunks {
+		lastHitAt := ""
+		if !chunk.LastHitAt.IsZero() {
+			lastHitAt = chunk.LastHitAt.Format(time.RFC3339)
+		}
+		chunks = append(chunks, KnowledgeChunkView{
+			ID:            chunk.ID,
+			ChunkIndex:    chunk.ChunkIndex,
+			Title:         chunk.Title,
+			SectionPath:   chunk.SectionPath,
+			Content:       chunk.Content,
+			TokenEstimate: chunk.TokenEstimate,
+			EmbeddingDim:  len(chunk.Embedding),
+			HitCount:      chunk.HitCount,
+			LastHitAt:     lastHitAt,
+		})
+	}
+
+	return &KnowledgeDocumentDetail{
+		ID:         doc.ID,
+		Title:      doc.Title,
+		Category:   doc.Category,
+		SourceName: doc.SourceName,
+		Status:     doc.Status,
+		Content:    doc.Content,
+		ChunkCount: doc.ChunkCount,
+		CreatedBy:  doc.CreatedBy,
+		CreatedAt:  doc.CreatedAt,
+		UpdatedAt:  doc.UpdatedAt,
+		Chunks:     chunks,
+	}, nil
+}
+
+func (s *KnowledgeService) DeleteDocument(ctx context.Context, documentID string) error {
+	_ = ctx
+	documentID = strings.TrimSpace(documentID)
+	if documentID == "" {
+		return errors.New("documentId is required")
+	}
+
+	path := filepath.Join(s.documentsDir, documentID+".json")
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return errors.New("knowledge document not found")
+		}
+		return err
+	}
+	return os.Remove(path)
+}
+
+func (s *KnowledgeService) SetDocumentStatus(ctx context.Context, documentID string, status string) (*KnowledgeDocumentSummary, error) {
+	_ = ctx
+	status = strings.TrimSpace(status)
+	if status != "active" && status != "disabled" {
+		return nil, errors.New("status must be active or disabled")
+	}
+
+	doc, err := s.loadDocument(documentID)
+	if err != nil {
+		return nil, err
+	}
+
+	doc.Status = status
+	doc.UpdatedAt = time.Now()
+	if err := s.saveDocument(doc); err != nil {
+		return nil, err
+	}
+
+	return &KnowledgeDocumentSummary{
+		ID:         doc.ID,
+		Title:      doc.Title,
+		Category:   doc.Category,
+		SourceName: doc.SourceName,
+		Status:     doc.Status,
+		ChunkCount: doc.ChunkCount,
+		CreatedAt:  doc.CreatedAt,
+		UpdatedAt:  doc.UpdatedAt,
+	}, nil
+}
+
+func (s *KnowledgeService) UpdateDocument(ctx context.Context, documentID string, input UpdateKnowledgeDocumentInput) (*KnowledgeDocumentDetail, error) {
+	doc, err := s.loadDocument(documentID)
+	if err != nil {
+		return nil, err
+	}
+
+	originalTitle := doc.Title
+	originalContent := doc.Content
+
+	if strings.TrimSpace(input.Title) != "" {
+		doc.Title = strings.TrimSpace(input.Title)
+	}
+	if strings.TrimSpace(input.Category) != "" {
+		doc.Category = strings.TrimSpace(input.Category)
+	}
+	if strings.TrimSpace(input.Content) != "" {
+		doc.Content = normalizeKnowledgeContent(input.Content)
+	}
+	if strings.TrimSpace(input.Status) != "" {
+		if input.Status != "active" && input.Status != "disabled" {
+			return nil, errors.New("status must be active or disabled")
+		}
+		doc.Status = input.Status
+	}
+
+	if strings.TrimSpace(doc.Title) == "" {
+		return nil, errors.New("title is required")
+	}
+	if strings.TrimSpace(doc.Category) == "" {
+		return nil, errors.New("category is required")
+	}
+	if strings.TrimSpace(doc.Content) == "" {
+		return nil, errors.New("content is required")
+	}
+
+	shouldReindex := doc.Title != originalTitle || doc.Content != originalContent
+	if shouldReindex {
+		if _, err := s.rebuildDocumentChunks(ctx, &doc); err != nil {
+			return nil, err
+		}
+	}
+
+	doc.UpdatedAt = time.Now()
+	if err := s.saveDocument(doc); err != nil {
+		return nil, err
+	}
+	return s.GetDocument(ctx, doc.ID)
+}
+
+func (s *KnowledgeService) ReindexDocument(ctx context.Context, documentID string) (*KnowledgeDocumentDetail, error) {
+	doc, err := s.loadDocument(documentID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.rebuildDocumentChunks(ctx, &doc); err != nil {
+		return nil, err
+	}
+	doc.UpdatedAt = time.Now()
+	if err := s.saveDocument(doc); err != nil {
+		return nil, err
+	}
+	return s.GetDocument(ctx, doc.ID)
+}
+
+func (s *KnowledgeService) SearchKnowledge(ctx context.Context, input SearchKnowledgeInput) ([]*KnowledgeSearchResult, error) {
+	input.Query = strings.TrimSpace(input.Query)
+	input.Category = strings.TrimSpace(input.Category)
+
+	if input.Query == "" {
+		return nil, errors.New("query is required")
+	}
+	if s.embeddingAPIKey == "" {
+		return nil, errors.New("EMBEDDING_API_KEY is not configured")
+	}
+
+	topK := input.TopK
+	if topK <= 0 {
+		topK = s.topK
+	}
+
+	queryVector, err := s.embedText(ctx, input.UserID, input.Role, input.Feature, input.Query)
+	if err != nil {
+		return nil, err
+	}
+
+	docs, err := s.loadAllDocuments()
+	if err != nil {
+		return nil, err
+	}
+
+	filteredDocs := make([]storedKnowledgeDocument, 0, len(docs))
+	for _, doc := range docs {
+		if doc.Status != "active" {
+			continue
+		}
+		if input.Category != "" && doc.Category != input.Category {
+			continue
+		}
+		filteredDocs = append(filteredDocs, doc)
+	}
+	if len(filteredDocs) == 0 {
+		return []*KnowledgeSearchResult{}, nil
+	}
+
+	allChunks := make([]storedKnowledgeChunk, 0)
+	for _, doc := range filteredDocs {
+		allChunks = append(allChunks, doc.Chunks...)
+	}
+
+	corpus := buildBM25Corpus(allChunks)
+	chunkDocMap := make(map[string]bm25Doc, len(corpus.Docs))
+	for _, doc := range corpus.Docs {
+		chunkDocMap[doc.ID] = doc
+	}
+
+	queryTerms := extractTerms(input.Query)
+	results := make([]*KnowledgeSearchResult, 0, len(allChunks))
+	for _, chunk := range allChunks {
+		vectorScore := cosineSimilarity(queryVector, chunk.Embedding)
+		keywordScore := scoreKeywordMatch(queryTerms, chunk.KeywordText)
+		lengthScore := scoreChunkLength(chunk.Content)
+
+		bm25Score := 0.0
+		if bm25DocItem, ok := chunkDocMap[chunk.ID]; ok {
+			bm25Score = scoreBM25(input.Query, bm25DocItem, corpus)
+		}
+
+		hybridScore := 0.55*vectorScore + 0.25*normalizeBM25Score(bm25Score) + 0.12*keywordScore + 0.08*lengthScore
+		results = append(results, &KnowledgeSearchResult{
+			DocumentID:   chunk.DocumentID,
+			ChunkID:      chunk.ID,
+			Title:        chunk.Title,
+			SectionPath:  chunk.SectionPath,
+			Content:      chunk.Content,
+			VectorScore:  vectorScore,
+			BM25Score:    bm25Score,
+			KeywordScore: keywordScore,
+			HybridScore:  hybridScore,
+			FinalScore:   hybridScore,
+			HitCount:     chunk.HitCount,
+		})
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].HybridScore > results[j].HybridScore
+	})
+
+	if len(results) > s.recallLimit {
+		results = results[:s.recallLimit]
+	}
+
+	candidateLimit := 20
+	if len(results) > candidateLimit {
+		results = results[:candidateLimit]
+	}
+
+	reranked, err := s.rerankResults(ctx, input.UserID, input.Role, input.Feature, input.Query, results)
+	if err != nil {
+		reranked = rerankKnowledgeResults(input.Query, results)
+	}
+	if len(reranked) > topK {
+		reranked = reranked[:topK]
+	}
+	_ = s.markSearchHits(reranked)
+	return reranked, nil
+}
+
+func (s *KnowledgeService) BuildPromptContext(results []*KnowledgeSearchResult) string {
+	if len(results) == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.WriteString("以下是从平台知识库召回的规则片段，请严格依据这些内容回答。\n\n")
+	for index, item := range results {
+		builder.WriteString(fmt.Sprintf("片段 %d\n", index+1))
+		builder.WriteString(fmt.Sprintf("标题：%s\n", item.Title))
+		builder.WriteString(fmt.Sprintf("路径：%s\n", item.SectionPath))
+		builder.WriteString(fmt.Sprintf("内容：%s\n\n", item.Content))
+	}
+	return strings.TrimSpace(builder.String())
+}
+
+func (s *KnowledgeService) ensureStorageDirs() error {
+	return os.MkdirAll(s.documentsDir, 0o755)
+}
+
+func (s *KnowledgeService) saveDocument(doc storedKnowledgeDocument) error {
+	payload, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(s.documentsDir, doc.ID+".json")
+	return os.WriteFile(path, payload, 0o644)
+}
+
+func (s *KnowledgeService) loadAllDocuments() ([]storedKnowledgeDocument, error) {
+	if err := s.ensureStorageDirs(); err != nil {
+		return nil, err
+	}
+
+	entries, err := os.ReadDir(s.documentsDir)
+	if err != nil {
+		return nil, err
+	}
+
+	docs := make([]storedKnowledgeDocument, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".json") {
+			continue
+		}
+
+		raw, err := os.ReadFile(filepath.Join(s.documentsDir, entry.Name()))
+		if err != nil {
+			return nil, err
+		}
+
+		var doc storedKnowledgeDocument
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			return nil, err
+		}
+		docs = append(docs, doc)
+	}
+	return docs, nil
+}
+
+func (s *KnowledgeService) loadDocument(documentID string) (storedKnowledgeDocument, error) {
+	documentID = strings.TrimSpace(documentID)
+	if documentID == "" {
+		return storedKnowledgeDocument{}, errors.New("documentId is required")
+	}
+
+	path := filepath.Join(s.documentsDir, documentID+".json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return storedKnowledgeDocument{}, errors.New("knowledge document not found")
+		}
+		return storedKnowledgeDocument{}, err
+	}
+
+	var doc storedKnowledgeDocument
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return storedKnowledgeDocument{}, err
+	}
+	return doc, nil
+}
+
+func (s *KnowledgeService) rebuildDocumentChunks(ctx context.Context, doc *storedKnowledgeDocument) ([]storedKnowledgeChunk, error) {
+	if doc == nil {
+		return nil, errors.New("document is required")
+	}
+	if strings.TrimSpace(doc.Content) == "" {
+		return nil, errors.New("document content is empty")
+	}
+	if s.embeddingAPIKey == "" {
+		return nil, errors.New("EMBEDDING_API_KEY is not configured")
+	}
+
+	chunkDefs := splitMarkdownIntoChunks(doc.Title, doc.Content, s.chunkSize, s.chunkOverlap)
+	if len(chunkDefs) == 0 {
+		return nil, errors.New("no chunks generated")
+	}
+
+	newChunks := make([]storedKnowledgeChunk, 0, len(chunkDefs))
+	for index, chunkDef := range chunkDefs {
+		embedding, err := s.embedText(ctx, doc.CreatedBy, model.RoleAdmin, model.TokenFeatureKnowledgeIngest, chunkDef.Content)
+		if err != nil {
+			return nil, err
+		}
+		newChunks = append(newChunks, storedKnowledgeChunk{
+			ID:            fmt.Sprintf("%s_chunk_%03d", doc.ID, index+1),
+			DocumentID:    doc.ID,
+			ChunkIndex:    index,
+			Title:         chunkDef.Title,
+			SectionPath:   chunkDef.SectionPath,
+			Content:       chunkDef.Content,
+			KeywordText:   buildKeywordText(chunkDef.Title, chunkDef.SectionPath, chunkDef.Content),
+			TokenEstimate: estimateTokenCount(chunkDef.Content),
+			Embedding:     embedding,
+		})
+	}
+
+	doc.Chunks = newChunks
+	doc.ChunkCount = len(newChunks)
+	return newChunks, nil
+}
+
+func (s *KnowledgeService) embedText(ctx context.Context, userID uint, role string, feature string, text string) ([]float64, error) {
+	requestBody := map[string]interface{}{
+		"model": s.embeddingModel,
+		"input": text,
+	}
+	payload, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, err
+	}
+
+	endpoint := s.embeddingBaseURL + "/embeddings"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+s.embeddingAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("embedding api error (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var result struct {
+		Data []struct {
+			Embedding []float64 `json:"embedding"`
+		} `json:"data"`
+		Usage struct {
+			PromptTokens int `json:"prompt_tokens"`
+			TotalTokens  int `json:"total_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+	if len(result.Data) == 0 || len(result.Data[0].Embedding) == 0 {
+		return nil, errors.New("embedding result is empty")
+	}
+	promptTokens := result.Usage.PromptTokens
+	totalTokens := result.Usage.TotalTokens
+	if totalTokens <= 0 {
+		promptTokens = estimateTokenCount(text)
+		totalTokens = promptTokens
+	}
+	if s.tokenUsageService != nil {
+		_ = s.tokenUsageService.Record(ctx, RecordTokenUsageInput{
+			UserID:           userID,
+			Role:             role,
+			Feature:          feature,
+			RequestKind:      model.TokenUsageKindEmbedding,
+			Provider:         "openai-compatible",
+			Model:            s.embeddingModel,
+			PromptTokens:     promptTokens,
+			CompletionTokens: 0,
+			TotalTokens:      totalTokens,
+		})
+	}
+	return result.Data[0].Embedding, nil
+}
+
+func splitMarkdownIntoChunks(documentTitle, content string, chunkSize, overlap int) []chunkItem {
+	lines := strings.Split(content, "\n")
+	sections := make([]chunkItem, 0)
+
+	currentTitle := documentTitle
+	currentPath := documentTitle
+	buffer := make([]string, 0)
+
+	flush := func() {
+		text := strings.TrimSpace(strings.Join(buffer, "\n"))
+		if text == "" {
+			buffer = buffer[:0]
+			return
+		}
+		sections = append(sections, splitLargeSection(currentTitle, currentPath, text, chunkSize, overlap)...)
+		buffer = buffer[:0]
+	}
+
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(rawLine)
+		if strings.HasPrefix(line, "#") {
+			flush()
+
+			level := 0
+			for level < len(line) && line[level] == '#' {
+				level++
+			}
+			title := strings.TrimSpace(line[level:])
+			if title != "" {
+				currentTitle = title
+				currentPath = documentTitle + " / " + title
+			}
+			continue
+		}
+		buffer = append(buffer, rawLine)
+	}
+
+	flush()
+	return sections
+}
+
+func splitLargeSection(title, sectionPath, content string, chunkSize, overlap int) []chunkItem {
+	runes := []rune(content)
+	if len(runes) <= chunkSize {
+		return []chunkItem{{
+			Title:       title,
+			SectionPath: sectionPath,
+			Content:     strings.TrimSpace(content),
+		}}
+	}
+
+	step := chunkSize - overlap
+	if step <= 0 {
+		step = chunkSize
+	}
+
+	result := make([]chunkItem, 0)
+	for start := 0; start < len(runes); start += step {
+		end := start + chunkSize
+		if end > len(runes) {
+			end = len(runes)
+		}
+
+		part := strings.TrimSpace(string(runes[start:end]))
+		if part == "" {
+			continue
+		}
+		result = append(result, chunkItem{
+			Title:       title,
+			SectionPath: sectionPath,
+			Content:     part,
+		})
+		if end == len(runes) {
+			break
+		}
+	}
+	return result
+}
+
+func buildKeywordText(title, sectionPath, content string) string {
+	return strings.ToLower(strings.Join([]string{title, sectionPath, content}, "\n"))
+}
+
+func estimateTokenCount(text string) int {
+	return len([]rune(text)) / 2
+}
+
+func extractTerms(query string) []string {
+	query = strings.ToLower(strings.TrimSpace(query))
+	fields := strings.FieldsFunc(query, func(r rune) bool {
+		return r == ' ' || r == '\n' || r == '\t' ||
+			r == '，' || r == '。' || r == ',' || r == '.' ||
+			r == '、' || r == ':' || r == '：' ||
+			r == '；' || r == ';' || r == '（' || r == '）' ||
+			r == '(' || r == ')' || r == '？' || r == '?'
+	})
+
+	result := make([]string, 0, len(fields))
+	for _, item := range fields {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
+func tokenizeKnowledgeText(text string) []string {
+	text = strings.ToLower(strings.TrimSpace(text))
+	fields := strings.FieldsFunc(text, func(r rune) bool {
+		return r == ' ' || r == '\n' || r == '\t' ||
+			r == '，' || r == '。' || r == ',' || r == '.' ||
+			r == '、' || r == ':' || r == '：' ||
+			r == '；' || r == ';' || r == '（' || r == '）' ||
+			r == '(' || r == ')' || r == '？' || r == '?'
+	})
+
+	result := make([]string, 0, len(fields))
+	for _, item := range fields {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
+func buildBM25Corpus(chunks []storedKnowledgeChunk) *bm25Corpus {
+	corpus := &bm25Corpus{
+		Docs:     make([]bm25Doc, 0, len(chunks)),
+		DocFreq:  make(map[string]int),
+		DocCount: len(chunks),
+	}
+
+	var totalLength int
+	for _, chunk := range chunks {
+		content := chunk.Title + "\n" + chunk.SectionPath + "\n" + chunk.Content
+		terms := tokenizeKnowledgeText(content)
+		totalLength += len(terms)
+
+		doc := bm25Doc{
+			ID:      chunk.ID,
+			Content: content,
+			Terms:   terms,
+			Length:  len(terms),
+		}
+		corpus.Docs = append(corpus.Docs, doc)
+
+		seen := make(map[string]struct{})
+		for _, term := range terms {
+			if _, ok := seen[term]; ok {
+				continue
+			}
+			seen[term] = struct{}{}
+			corpus.DocFreq[term]++
+		}
+	}
+
+	if corpus.DocCount > 0 {
+		corpus.AvgDocLen = float64(totalLength) / float64(corpus.DocCount)
+	}
+	return corpus
+}
+
+func scoreBM25(query string, doc bm25Doc, corpus *bm25Corpus) float64 {
+	queryTerms := tokenizeKnowledgeText(query)
+	if len(queryTerms) == 0 || doc.Length == 0 || corpus == nil || corpus.DocCount == 0 {
+		return 0
+	}
+
+	tf := make(map[string]int)
+	for _, term := range doc.Terms {
+		tf[term]++
+	}
+
+	const k1 = 1.5
+	const b = 0.75
+
+	var score float64
+	for _, term := range queryTerms {
+		freq := tf[term]
+		if freq == 0 {
+			continue
+		}
+
+		df := corpus.DocFreq[term]
+		idf := math.Log(1 + (float64(corpus.DocCount-df)+0.5)/(float64(df)+0.5))
+		numerator := float64(freq) * (k1 + 1)
+		denominator := float64(freq) + k1*(1-b+b*(float64(doc.Length)/corpus.AvgDocLen))
+		score += idf * (numerator / denominator)
+	}
+	return score
+}
+
+func normalizeBM25Score(score float64) float64 {
+	if score <= 0 {
+		return 0
+	}
+	return score / (score + 5)
+}
+
+func scoreKeywordMatch(terms []string, text string) float64 {
+	if len(terms) == 0 || strings.TrimSpace(text) == "" {
+		return 0
+	}
+
+	text = strings.ToLower(text)
+	var score float64
+	for _, term := range terms {
+		if strings.Contains(text, term) {
+			score += 1
+		}
+	}
+	return score / float64(len(terms))
+}
+
+func scoreChunkLength(text string) float64 {
+	length := len([]rune(strings.TrimSpace(text)))
+	switch {
+	case length >= 150 && length <= 700:
+		return 1
+	case length >= 80 && length < 150:
+		return 0.8
+	case length > 700 && length <= 1000:
+		return 0.7
+	default:
+		return 0.5
+	}
+}
+
+func cosineSimilarity(a, b []float64) float64 {
+	if len(a) == 0 || len(a) != len(b) {
+		return 0
+	}
+
+	var dot float64
+	var normA float64
+	var normB float64
+	for i := range a {
+		dot += a[i] * b[i]
+		normA += a[i] * a[i]
+		normB += b[i] * b[i]
+	}
+	if normA == 0 || normB == 0 {
+		return 0
+	}
+	return dot / (math.Sqrt(normA) * math.Sqrt(normB))
+}
+
+func rerankKnowledgeResults(query string, results []*KnowledgeSearchResult) []*KnowledgeSearchResult {
+	queryTerms := extractTerms(query)
+	for _, item := range results {
+		text := strings.ToLower(item.Title + "\n" + item.SectionPath + "\n" + item.Content)
+		exactBoost := 0.0
+		for _, term := range queryTerms {
+			if strings.Contains(text, term) {
+				exactBoost += 0.02
+			}
+		}
+		item.FinalScore = item.HybridScore + exactBoost
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].FinalScore > results[j].FinalScore
+	})
+	return results
+}
+
+func (s *KnowledgeService) rerankResults(ctx context.Context, userID uint, role string, feature string, query string, candidates []*KnowledgeSearchResult) ([]*KnowledgeSearchResult, error) {
+	if len(candidates) == 0 {
+		return candidates, nil
+	}
+	if s.rerankAPIKey == "" || s.rerankModel == "" {
+		return candidates, nil
+	}
+
+	documents := make([]string, 0, len(candidates))
+	for _, item := range candidates {
+		documents = append(documents, item.Title+"\n"+item.SectionPath+"\n"+item.Content)
+	}
+
+	requestBody := map[string]interface{}{
+		"model":     s.rerankModel,
+		"query":     query,
+		"documents": documents,
+		"top_n":     len(candidates),
+	}
+	payload, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, err
+	}
+
+	endpoint := s.rerankBaseURL + "/rerank"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+s.rerankAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("rerank api error (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var result struct {
+		Results []struct {
+			Index          int     `json:"index"`
+			RelevanceScore float64 `json:"relevance_score"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+
+	reranked := make([]*KnowledgeSearchResult, 0, len(result.Results))
+	for _, item := range result.Results {
+		if item.Index < 0 || item.Index >= len(candidates) {
+			continue
+		}
+		candidate := candidates[item.Index]
+		candidate.RerankScore = item.RelevanceScore
+		candidate.FinalScore = 0.35*candidate.HybridScore + 0.65*candidate.RerankScore
+		reranked = append(reranked, candidate)
+	}
+
+	if len(reranked) == 0 {
+		return candidates, nil
+	}
+
+	if s.tokenUsageService != nil {
+		estimatedPromptTokens := estimateTokenCount(query)
+		for _, item := range candidates {
+			estimatedPromptTokens += estimateTokenCount(item.Content)
+		}
+		_ = s.tokenUsageService.Record(ctx, RecordTokenUsageInput{
+			UserID:           userID,
+			Role:             role,
+			Feature:          feature,
+			RequestKind:      model.TokenUsageKindRerank,
+			Provider:         "openai-compatible",
+			Model:            s.rerankModel,
+			PromptTokens:     estimatedPromptTokens,
+			CompletionTokens: 0,
+			TotalTokens:      estimatedPromptTokens,
+		})
+	}
+
+	sort.Slice(reranked, func(i, j int) bool {
+		return reranked[i].FinalScore > reranked[j].FinalScore
+	})
+	return reranked, nil
+}
+
+func (s *KnowledgeService) markSearchHits(results []*KnowledgeSearchResult) error {
+	if len(results) == 0 {
+		return nil
+	}
+
+	docs, err := s.loadAllDocuments()
+	if err != nil {
+		return err
+	}
+
+	docMap := make(map[string]*storedKnowledgeDocument, len(docs))
+	for i := range docs {
+		docMap[docs[i].ID] = &docs[i]
+	}
+
+	now := time.Now()
+	changedDocs := make(map[string]*storedKnowledgeDocument)
+	for _, result := range results {
+		doc := docMap[result.DocumentID]
+		if doc == nil {
+			continue
+		}
+		for index := range doc.Chunks {
+			if doc.Chunks[index].ID != result.ChunkID {
+				continue
+			}
+			doc.Chunks[index].HitCount++
+			doc.Chunks[index].LastHitAt = now
+			doc.UpdatedAt = now
+			result.HitCount = doc.Chunks[index].HitCount
+			result.LastHitAt = now.Format(time.RFC3339)
+			changedDocs[doc.ID] = doc
+			break
+		}
+	}
+
+	for _, doc := range changedDocs {
+		if err := s.saveDocument(*doc); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func normalizeKnowledgeContent(content string) string {
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.ReplaceAll(content, "\r", "\n")
+	return strings.TrimSpace(content)
+}
+
+func detectKnowledgeContentType(sourceName string) string {
+	lower := strings.ToLower(strings.TrimSpace(sourceName))
+	switch {
+	case strings.HasSuffix(lower, ".md"):
+		return "text/markdown"
+	case strings.HasSuffix(lower, ".txt"):
+		return "text/plain"
+	default:
+		return "text/plain"
+	}
+}
+
+func randomKnowledgeSuffix() string {
+	buf := make([]byte, 4)
+	if _, err := rand.Read(buf); err != nil {
+		return "00000000"
+	}
+	return hex.EncodeToString(buf)
+}

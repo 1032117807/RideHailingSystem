@@ -1,0 +1,60 @@
+package handler
+
+import (
+	"net/http"
+	"strings"
+	"time"
+
+	"ridehailing/backend/internal/pkg/response"
+	"ridehailing/backend/internal/service"
+)
+
+type TicketHandler struct {
+	ticketService *service.TicketService
+}
+
+func NewTicketHandler(ticketService *service.TicketService) *TicketHandler {
+	return &TicketHandler{ticketService: ticketService}
+}
+
+
+func (h *TicketHandler) Search(w http.ResponseWriter, r *http.Request) {
+	startCity := strings.TrimSpace(r.URL.Query().Get("startCity"))
+	endCity := strings.TrimSpace(r.URL.Query().Get("endCity"))
+	dateRaw := strings.TrimSpace(r.URL.Query().Get("date"))
+
+	date, err := time.ParseInLocation("2006-01-02", dateRaw, time.Local)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "date must be format 2006-01-02")
+		return
+	}
+
+	trips, err := h.ticketService.SearchTickets(r.Context(), service.SearchTicketsInput{
+		StartCity: startCity,
+		EndCity:   endCity,
+		Date:      date,
+	})
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.Success(w, trips)
+}
+
+func (h *TicketHandler) Detail(w http.ResponseWriter, r *http.Request) {
+	ticketID, err := parsePathUint(r.PathValue("ticketId"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid ticketId")
+		return
+	}
+
+	trip, err := h.ticketService.GetTicketDetail(r.Context(), ticketID)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	response.Success(w, trip)
+}
+

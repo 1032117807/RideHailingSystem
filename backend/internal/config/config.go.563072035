@@ -1,0 +1,93 @@
+package config
+
+import (
+	"os"
+	"strconv"
+	"time"
+	"strings"
+)
+
+type Config struct {
+	ServerAddress  string
+	MySQLDSN       string
+	RedisAddr      string
+	RedisPassword  string
+	RedisDB        int
+	RedisKeyPrefix string
+	JWTSecret      string
+	JWTExpireTime  time.Duration
+	CodeTTL        time.Duration
+
+
+	OpenAIAPIKey   string
+	OpenAIBaseURL  string
+	OpenAIModel    string
+	OpenAITimeout  time.Duration
+
+	EnableMockPayment bool
+	AIRateLimitPrefix   string
+	AIPassengerChatLimit int
+	AIDriverDraftLimit   int
+	AIRateLimitWindow    time.Duration
+}
+
+func Load() *Config {
+	return &Config{
+		ServerAddress:  getEnv("SERVER_ADDR", ":8080"),
+		MySQLDSN:       getEnv("MYSQL_DSN", "root:hyh@tcp(127.0.0.1:3306)/ridehailing?charset=utf8mb4&parseTime=True&loc=Local"),
+		RedisAddr:      getEnv("REDIS_ADDR", "127.0.0.1:6379"),
+		RedisPassword:  getEnv("REDIS_PASSWORD", ""),
+		RedisDB:        getEnvInt("REDIS_DB", 0),
+		RedisKeyPrefix: getEnv("REDIS_KEY_PREFIX", "auth:email_code:"),
+		JWTSecret:      getEnv("JWT_SECRET", "replace-with-your-secret"),
+		JWTExpireTime:  time.Duration(getEnvInt("JWT_EXPIRE_HOURS", 168)) * time.Hour,
+		CodeTTL:        time.Duration(getEnvInt("EMAIL_CODE_TTL_SECONDS", 300)) * time.Second,
+		OpenAIAPIKey:   getEnv("OPENAI_API_KEY", ""),
+		OpenAIBaseURL:  getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+		OpenAIModel:    getEnv("OPENAI_MODEL", "gpt-5-mini"),
+		OpenAITimeout:  time.Duration(getEnvInt("OPENAI_TIMEOUT_SECONDS", 20)) * time.Second,
+		EnableMockPayment:    getEnvBool("ENABLE_MOCK_PAYMENT", false),
+		AIRateLimitPrefix:    getEnv("AI_RATE_LIMIT_PREFIX", "ai:rate:"),
+		AIPassengerChatLimit: getEnvInt("AI_PASSENGER_CHAT_LIMIT", 12),
+		AIDriverDraftLimit:   getEnvInt("AI_DRIVER_DRAFT_LIMIT", 6),
+		AIRateLimitWindow:    time.Duration(getEnvInt("AI_RATE_LIMIT_WINDOW_SECONDS", 60)) * time.Second,
+
+	}
+}
+
+func getEnv(key, fallback string) string {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	return v
+}
+
+func getEnvInt(key string, fallback int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	i, err := strconv.Atoi(v)
+	if err != nil {
+		return fallback
+	}
+	return i
+}
+
+
+func getEnvBool(key string, fallback bool) bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if v == "" {
+		return fallback
+	}
+
+	switch v {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
+}

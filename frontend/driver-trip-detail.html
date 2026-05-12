@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>班次详情 - 司机端 - TripVerse</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="driver">
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a class="brand" href="index.html"><span class="brand-mark">TV</span><span>TripVerse</span></a>
+      <nav class="nav-links">
+        <a data-nav="home" href="index.html">首页</a>
+        <a data-nav="search" href="search.html">购票</a>
+        <a data-nav="orders" href="orders.html">订单</a>
+        <a data-nav="profile" href="profile.html">个人中心</a>
+        <a data-nav="driver" href="driver-dashboard.html">司机端</a>
+        <a data-nav="admin" href="admin-dashboard.html">管理端</a>
+        <a data-nav="ai" href="ai-assistant.html">AI 助手</a>
+      </nav>
+      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+    </div>
+    <div class="mobile-drawer">
+      <div class="container mobile-links">
+        <a data-nav="home" data-nav-close href="index.html">首页</a>
+        <a data-nav="search" data-nav-close href="search.html">购票</a>
+        <a data-nav="orders" data-nav-close href="orders.html">订单</a>
+        <a data-nav="profile" data-nav-close href="profile.html">个人中心</a>
+        <a data-nav="driver" data-nav-close href="driver-dashboard.html">司机端</a>
+        <a data-nav="admin" data-nav-close href="admin-dashboard.html">管理端</a>
+        <a data-nav="ai" data-nav-close href="ai-assistant.html">AI 助手</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="container">
+      <div class="tab-strip">
+        <a href="driver-dashboard.html">司机首页</a>
+        <a href="driver-publish.html">发布班次</a>
+        <a href="driver-trips.html">班次管理</a>
+        <a class="is-active" href="driver-trip-detail.html">班次详情</a>
+        <a href="driver-income.html">收益页</a>
+        <a href="driver-ai.html">AI 辅助</a>
+      </div>
+
+      <section class="page-hero">
+        <div class="row-between">
+          <div>
+            <span class="eyebrow">班次详情</span>
+            <h1 class="section-title" data-driver-trip-title>班次加载中...</h1>
+          </div>
+          <div class="chip-row" data-driver-trip-chips>
+            <span class="mini-chip">正在读取状态</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="split-grid">
+        <article class="panel">
+          <h2 class="subhead">班次信息</h2>
+          <div class="list-stack section-block">
+            <div class="list-item">
+              <strong>发车时间</strong>
+              <div class="list-meta" data-driver-trip-time>
+                <span>--</span>
+                <span>--</span>
+              </div>
+            </div>
+            <div class="list-item">
+              <strong>途经站点</strong>
+              <div class="list-meta" data-driver-trip-stops>
+                <span>--</span>
+              </div>
+            </div>
+            <div class="list-item">
+              <strong>票价与座位</strong>
+              <div class="list-meta" data-driver-trip-seat-info>
+                <span>--</span>
+                <span>--</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <aside class="panel">
+          <h2 class="subhead">订单状态</h2>
+          <div class="list-stack section-block" data-driver-order-summary>
+            <div class="info-card">
+              <strong>正在读取订单摘要</strong>
+              <p class="muted">请稍候...</p>
+            </div>
+          </div>
+          <div class="button-row section-block">
+            <button class="button button-primary" type="button" data-driver-open-verification>刷新核销列表</button>
+            <a class="button button-ghost" href="driver-trips.html">返回班次管理</a>
+          </div>
+        </aside>
+      </section>
+
+      <section class="panel">
+        <div class="row-between">
+          <div>
+            <h2 class="subhead">待核销订单</h2>
+            <p class="muted">这里只显示当前班次的真实订单，司机可以逐笔完成核销。</p>
+          </div>
+        </div>
+        <div class="list-stack section-block" data-driver-trip-orders>
+          <div class="info-card">
+            <strong>正在读取订单列表</strong>
+            <p class="muted">请稍候...</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-card">司机端详情页已接通真实订单列表和核销动作。</div>
+  </footer>
+  <script src="assets/runtime-config.js?v=20260506-driver-verify"></script>
+  <script src="assets/app.js?v=20260506-driver-verify"></script>
+</body>
+</html>

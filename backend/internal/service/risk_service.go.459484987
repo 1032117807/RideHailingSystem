@@ -1,0 +1,249 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"ridehailing/backend/internal/model"
+	"ridehailing/backend/internal/repository"
+)
+
+type RiskMetrics map[string]interface{}
+
+type AdminRiskItem struct {
+	ID        uint        `json:"id"`
+	Severity  string      `json:"severity"`
+	EventType string      `json:"eventType"`
+	SubjectID string      `json:"subjectId"`
+	Title     string      `json:"title"`
+	Detail    string      `json:"detail"`
+	Status    string      `json:"status"`
+	Metrics   RiskMetrics `json:"metrics"`
+	CreatedAt time.Time   `json:"createdAt"`
+}
+
+type AdminRiskSummary struct {
+	OpenCount    int `json:"openCount"`
+	HighCount    int `json:"highCount"`
+	MediumCount  int `json:"mediumCount"`
+	LowCount     int `json:"lowCount"`
+	TotalCount   int `json:"totalCount"`
+}
+
+type AdminRiskResult struct {
+	Start string            `json:"start"`
+	End   string            `json:"end"`
+	Items []*AdminRiskItem  `json:"items"`
+	Summary AdminRiskSummary `json:"summary"`
+}
+
+type RiskService struct {
+	riskRepo       *repository.RiskEventRepository
+	tokenUsageRepo *repository.TokenUsageRepository
+}
+
+func NewRiskService(riskRepo *repository.RiskEventRepository, tokenUsageRepo *repository.TokenUsageRepository) *RiskService {
+	return &RiskService{
+		riskRepo:       riskRepo,
+		tokenUsageRepo: tokenUsageRepo,
+	}
+}
+
+func (s *RiskService) RecordAIRateLimitEvent(ctx context.Context, userID uint, role string, scope string, subject string, limit int64, retryAfter time.Duration) error {
+	fingerprint := fmt.Sprintf("%s:%s:%d", model.RiskEventTypeAIRateLimit, scope, userID)
+	existing, err := s.riskRepo.FindOpenByFingerprintSince(ctx, fingerprint, time.Now().Add(-30*time.Minute))
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		return nil
+	}
+
+	metrics := RiskMetrics{
+		"scope":            scope,
+		"subject":          subject,
+		"limit":            limit,
+		"retryAfterSecond": int(retryAfter.Seconds()),
+	}
+	payload, _ := json.Marshal(metrics)
+
+	return s.riskRepo.Create(ctx, &model.RiskEvent{
+		Severity:    model.RiskSeverityHigh,
+		EventType:   model.RiskEventTypeAIRateLimit,
+		SubjectType: "user",
+		SubjectID:   fmt.Sprintf("%d", userID),
+		Fingerprint: fingerprint,
+		Title:       "AI 接口限流触发",
+		Detail:      fmt.Sprintf("用户 %d 在 %s 触发了 AI 限流，系统已拒绝继续请求。", userID, scope),
+		Status:      model.RiskStatusOpen,
+		MetricsJSON: string(payload),
+	})
+}
+
+func (s *RiskService) DetectTokenSpikeEvents(ctx context.Context) error {
+	if s.tokenUsageRepo == nil {
+		return nil
+	}
+
+	now := time.Now()
+	currentStart := now.Add(-15 * time.Minute)
+	baselineStart := now.AddDate(0, 0, -7)
+
+	currentRows, err := s.tokenUsageRepo.ListUserSummary(ctx, currentStart, now, "")
+	if err != nil {
+		return err
+	}
+	baselineRows, err := s.tokenUsageRepo.ListUserSummary(ctx, baselineStart, currentStart, "")
+	if err != nil {
+		return err
+	}
+
+	baselineMap := make(map[uint]*repository.TokenUsageUserSummaryRow, len(baselineRows))
+	for _, row := range baselineRows {
+		baselineMap[row.UserID] = row
+	}
+
+	windowsPerWeek := float64(7 * 24 * 4)
+	for _, row := range currentRows {
+		if row == nil || row.UserID == 0 {
+			continue
+		}
+
+		baseline := baselineMap[row.UserID]
+		baselineTokensPer15 := 0.0
+		baselineRequestsPer15 := 0.0
+		if baseline != nil {
+			baselineTokensPer15 = float64(baseline.TotalTokens) / windowsPerWeek
+			baselineRequestsPer15 = float64(baseline.RequestCount) / windowsPerWeek
+		}
+
+		isSpike := false
+		severity := model.RiskSeverityMedium
+		if row.TotalTokens >= 3000 && (baselineTokensPer15 == 0 || float64(row.TotalTokens) >= baselineTokensPer15*4) {
+			isSpike = true
+		}
+		if row.RequestCount >= 8 && (baselineRequestsPer15 == 0 || float64(row.RequestCount) >= baselineRequestsPer15*4) {
+			isSpike = true
+		}
+		if row.TotalTokens >= 12000 {
+			severity = model.RiskSeverityHigh
+			isSpike = true
+		}
+		if !isSpike {
+			continue
+		}
+
+		fingerprint := fmt.Sprintf("%s:%d:%s", model.RiskEventTypeTokenSpike, row.UserID, now.Format("200601021504"))
+		existing, err := s.riskRepo.FindOpenByFingerprintSince(ctx, fingerprint, now.Add(-20*time.Minute))
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			continue
+		}
+
+		metrics := RiskMetrics{
+			"currentTotalTokens":   row.TotalTokens,
+			"currentRequestCount":  row.RequestCount,
+			"baselineTokensPer15":  baselineTokensPer15,
+			"baselineRequestsPer15": baselineRequestsPer15,
+		}
+		payload, _ := json.Marshal(metrics)
+
+		if err := s.riskRepo.Create(ctx, &model.RiskEvent{
+			Severity:    severity,
+			EventType:   model.RiskEventTypeTokenSpike,
+			SubjectType: "user",
+			SubjectID:   fmt.Sprintf("%d", row.UserID),
+			Fingerprint: fingerprint,
+			Title:       "Token 使用量异常飙升",
+			Detail:      fmt.Sprintf("用户 %d 在最近 15 分钟内的 token 使用量明显高于历史水平。", row.UserID),
+			Status:      model.RiskStatusOpen,
+			MetricsJSON: string(payload),
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *RiskService) GetAdminRisks(ctx context.Context, currentUserRole string, severity string, status string, start time.Time, end time.Time) (*AdminRiskResult, error) {
+	if currentUserRole != model.RoleAdmin {
+		return nil, errors.New("only admin can view risk logs")
+	}
+
+	_ = s.DetectTokenSpikeEvents(ctx)
+
+	items, err := s.riskRepo.ListForAdmin(ctx, repository.RiskEventListFilter{
+		Severity: strings.TrimSpace(severity),
+		Status:   strings.TrimSpace(status),
+		Start:    start,
+		End:      end,
+	})
+	if err != nil {
+		return nil, err
+	}
+	summaryRows, err := s.riskRepo.CountBySeverity(ctx, start, end)
+	if err != nil {
+		return nil, err
+	}
+	openCount, err := s.riskRepo.CountOpen(ctx, start, end)
+	if err != nil {
+		return nil, err
+	}
+
+	resultItems := make([]*AdminRiskItem, 0, len(items))
+	for _, item := range items {
+		metrics := RiskMetrics{}
+		if strings.TrimSpace(item.MetricsJSON) != "" {
+			_ = json.Unmarshal([]byte(item.MetricsJSON), &metrics)
+		}
+		resultItems = append(resultItems, &AdminRiskItem{
+			ID:        item.ID,
+			Severity:  item.Severity,
+			EventType: item.EventType,
+			SubjectID: item.SubjectID,
+			Title:     item.Title,
+			Detail:    item.Detail,
+			Status:    item.Status,
+			Metrics:   metrics,
+			CreatedAt: item.CreatedAt,
+		})
+	}
+
+	summary := AdminRiskSummary{OpenCount: openCount}
+	for _, row := range summaryRows {
+		summary.TotalCount += row.Count
+		switch row.Severity {
+		case model.RiskSeverityHigh:
+			summary.HighCount = row.Count
+		case model.RiskSeverityMedium:
+			summary.MediumCount = row.Count
+		case model.RiskSeverityLow:
+			summary.LowCount = row.Count
+		}
+	}
+
+	return &AdminRiskResult{
+		Start:   start.Format(time.RFC3339),
+		End:     end.Format(time.RFC3339),
+		Items:   resultItems,
+		Summary: summary,
+	}, nil
+}
+
+func (s *RiskService) UpdateRiskStatus(ctx context.Context, currentUserRole string, eventID uint, status string) error {
+	if currentUserRole != model.RoleAdmin {
+		return errors.New("only admin can update risk status")
+	}
+	status = strings.TrimSpace(status)
+	if status != model.RiskStatusOpen && status != model.RiskStatusAcknowledged && status != model.RiskStatusResolved {
+		return errors.New("invalid risk status")
+	}
+	return s.riskRepo.UpdateStatus(ctx, eventID, status)
+}

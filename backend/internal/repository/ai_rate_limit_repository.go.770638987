@@ -1,0 +1,50 @@
+package repository
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+)
+
+type AIRateLimiter interface {
+	Allow(ctx context.Context, scope, subject string, limit int64, window time.Duration) (allowed bool, remaining int64, retryAfter time.Duration, err error)
+}
+
+type RedisAIRateLimiter struct {
+	client redis.UniversalClient
+	prefix string
+}
+
+func NewRedisAIRateLimiter(client redis.UniversalClient, prefix string) *RedisAIRateLimiter {
+	return &RedisAIRateLimiter{client: client, prefix: prefix}
+}
+
+func (r *RedisAIRateLimiter) Allow(ctx context.Context, scope, subject string, limit int64, window time.Duration) (bool, int64, time.Duration, error) {
+	key := fmt.Sprintf("%s%s:%s", r.prefix, strings.TrimSpace(scope), strings.TrimSpace(subject))
+
+	count, err := r.client.Incr(ctx, key).Result()
+	if err != nil {
+		return false, 0, 0, err
+	}
+
+	if count == 1 {
+		if err := r.client.Expire(ctx, key, window).Err(); err != nil {
+			return false, 0, 0, err
+		}
+	}
+
+	ttl, err := r.client.TTL(ctx, key).Result()
+	if err != nil {
+		return false, 0, 0, err
+	}
+
+	remaining := limit - count
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	return count <= limit, remaining, ttl, nil
+}

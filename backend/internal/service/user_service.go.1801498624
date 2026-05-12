@@ -1,0 +1,154 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"time"
+
+	"ridehailing/backend/internal/model"
+	"ridehailing/backend/internal/repository"
+)
+
+type UpdateProfileInput struct {
+	Nickname    string
+	Avatar      string
+	Email       string
+	Gender      string
+	Birthday    *time.Time
+	DefaultRole string
+}
+
+type AccountStatus struct {
+	Status           string `json:"status"`
+	Role             string `json:"role"`
+	DefaultRole      string `json:"defaultRole"`
+	RealNameVerified bool   `json:"realNameVerified"`
+	CanLogin         bool   `json:"canLogin"`
+}
+
+type UserService struct {
+	userRepo repository.UserRepository
+}
+
+func NewUserService(userRepo repository.UserRepository) *UserService {
+	return &UserService{userRepo: userRepo}
+}
+
+func (s *UserService) GetProfile(ctx context.Context, userID uint) (*model.User, error) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, errors.New("user not found")
+	}
+	return user, nil
+}
+
+func (s *UserService) UpdateProfile(ctx context.Context, userID uint, input UpdateProfileInput) (*model.User, error) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, errors.New("user not found")
+	}
+
+	if input.Nickname != "" {
+		user.Nickname = strings.TrimSpace(input.Nickname)
+	}
+	if input.Avatar != "" {
+		user.Avatar = strings.TrimSpace(input.Avatar)
+	}
+	if input.Email != "" {
+		user.Email = strings.TrimSpace(input.Email)
+	}
+	if input.Gender != "" {
+		user.Gender = strings.TrimSpace(input.Gender)
+	}
+	if input.Birthday != nil {
+		user.Birthday = input.Birthday
+	}
+	if input.DefaultRole != "" {
+		role := normalizeRole(input.DefaultRole)
+		if role != model.RolePassenger && role != model.RoleDriver && role != model.RoleAdmin {
+			return nil, errors.New("invalid default role")
+		}
+		user.DefaultRole = role
+	}
+
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+func (s *UserService) VerifyRealName(ctx context.Context, userID uint, realName, idCard string) (*model.User, error) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, errors.New("user not found")
+	}
+
+	realName = strings.TrimSpace(realName)
+	idCard = strings.TrimSpace(idCard)
+	if realName == "" || idCard == "" {
+		return nil, errors.New("realName and idCard are required")
+	}
+
+	user.RealName = realName
+	user.IDCard = idCard
+	user.RealNameVerified = true
+
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+func (s *UserService) SwitchRole(ctx context.Context, userID uint, targetRole string) (*model.User, error) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, errors.New("user not found")
+	}
+
+	targetRole = normalizeRole(targetRole)
+	if targetRole != model.RolePassenger && targetRole != model.RoleDriver {
+		return nil, errors.New("targetRole must be passenger or driver")
+	}
+	if user.Status != model.UserStatusActive {
+		return nil, errors.New("account status is not active")
+	}
+
+	user.Role = targetRole
+	user.DefaultRole = targetRole
+
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+func (s *UserService) GetAccountStatus(ctx context.Context, userID uint) (*AccountStatus, error) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, errors.New("user not found")
+	}
+
+	return &AccountStatus{
+		Status:           user.Status,
+		Role:             user.Role,
+		DefaultRole:      user.DefaultRole,
+		RealNameVerified: user.RealNameVerified,
+		CanLogin:         user.Status == model.UserStatusActive,
+	}, nil
+}

@@ -1,0 +1,59 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"time"
+
+	"ridehailing/backend/internal/model"
+	"ridehailing/backend/internal/repository"
+)
+
+// 定义前端输入的行程信息结构体
+type SearchTicketsInput struct {
+	StartCity string
+	EndCity   string
+	Date      time.Time
+}
+
+type TicketService struct {
+	tripRepo repository.TripRepository
+}
+
+func NewTicketService(tripRepo repository.TripRepository) *TicketService {
+	return &TicketService{tripRepo: tripRepo}
+}
+
+func (s *TicketService) SearchTickets(ctx context.Context, input SearchTicketsInput) ([]*model.Trip, error) {
+	input.StartCity = strings.TrimSpace(input.StartCity)
+	input.EndCity = strings.TrimSpace(input.EndCity)
+
+	if input.StartCity == "" || input.EndCity == "" {
+		return nil, errors.New("startCity and endCity are required")
+	}
+
+	if input.Date.IsZero() {
+		return nil, errors.New("date is required")
+	}
+
+	dayStart := time.Date(input.Date.Year(), input.Date.Month(), input.Date.Day(), 0, 0, 0, 0, input.Date.Location())
+	dayEnd := dayStart.Add(24 * time.Hour)
+
+	return s.tripRepo.SearchPublishedTrips(ctx, input.StartCity, input.EndCity, dayStart, dayEnd)
+}
+
+
+func (s *TicketService) GetTicketDetail(ctx context.Context, tripID uint) (*model.Trip, error) {
+	trip, err := s.tripRepo.GetByID(ctx, tripID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 只有已发布的行程才可以查看详情
+	if trip == nil || trip.Status != model.TripStatusPublished {
+		return nil, errors.New("ticket not found")
+	}
+	return trip, nil
+}
+

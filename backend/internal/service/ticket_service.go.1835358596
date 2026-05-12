@@ -1,0 +1,344 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+
+	"ridehailing/backend/internal/model"
+	"ridehailing/backend/internal/repository"
+)
+
+const (
+	minTransferWait = 20 * time.Minute
+	maxTransferWait = 6 * time.Hour
+	maxTransferPlan = 8
+	maxSuggestedRoute = 6
+)
+
+// SearchTicketsInput 定义票务搜索输入；AllowTransfer 控制是否尝试一次中转方案。
+type SearchTicketsInput struct {
+	StartCity     string
+	EndCity       string
+	Date          time.Time
+	AllowTransfer bool
+}
+
+// TicketSearchLeg 描述一个实际乘坐班次。
+type TicketSearchLeg struct {
+	TripID        uint      `json:"tripId"`
+	StartCity     string    `json:"startCity"`
+	EndCity       string    `json:"endCity"`
+	DepartureTime time.Time `json:"departureTime"`
+	ArrivalTime   time.Time `json:"arrivalTime"`
+	SeatAvailable int       `json:"seatAvailable"`
+	PriceCent     int       `json:"priceCent"`
+	VehicleType   string    `json:"vehicleType"`
+}
+
+// TicketRouteSuggestion 描述“当天没有精确可售班次时”的候选路线建议。
+type TicketRouteSuggestion struct {
+	Route            string `json:"route"`
+	TransferCity     string `json:"transferCity"`
+	FirstLegCount    int    `json:"firstLegCount"`
+	SecondLegCount   int    `json:"secondLegCount"`
+	TotalOptionCount int    `json:"totalOptionCount"`
+	Reason           string `json:"reason"`
+}
+
+// TicketSearchResult 统一直达和一次中转的返回结构，前端和 AI 都使用它。
+type TicketSearchResult struct {
+	Kind               string             `json:"kind"`
+	ID                 uint               `json:"id,omitempty"`
+	StartCity          string             `json:"startCity"`
+	EndCity            string             `json:"endCity"`
+	DepartureTime      time.Time          `json:"departureTime"`
+	ArrivalTime        time.Time          `json:"arrivalTime"`
+	SeatAvailable      int                `json:"seatAvailable"`
+	PriceCent          int                `json:"priceCent"`
+	VehicleType        string             `json:"vehicleType"`
+	Status             string             `json:"status"`
+	TransferCity       string             `json:"transferCity,omitempty"`
+	TransferWaitMinute int                `json:"transferWaitMinute,omitempty"`
+	Legs               []*TicketSearchLeg `json:"legs,omitempty"`
+	Suggestions        []*TicketRouteSuggestion `json:"suggestions,omitempty"`
+}
+
+type TicketService struct {
+	tripRepo repository.TripRepository
+}
+
+func NewTicketService(tripRepo repository.TripRepository) *TicketService {
+	return &TicketService{tripRepo: tripRepo}
+}
+
+// SearchTickets 先返回直达班次；如果允许中转，再补充一次中转方案。
+func (s *TicketService) SearchTickets(ctx context.Context, input SearchTicketsInput) ([]*TicketSearchResult, error) {
+	input.StartCity = strings.TrimSpace(input.StartCity)
+	input.EndCity = strings.TrimSpace(input.EndCity)
+
+	if input.StartCity == "" || input.EndCity == "" {
+		return nil, errors.New("startCity and endCity are required")
+	}
+	if input.Date.IsZero() {
+		return nil, errors.New("date is required")
+	}
+	if input.StartCity == input.EndCity {
+		return nil, errors.New("startCity and endCity must be different")
+	}
+
+	dayStart := time.Date(input.Date.Year(), input.Date.Month(), input.Date.Day(), 0, 0, 0, 0, input.Date.Location())
+	dayEnd := dayStart.Add(24 * time.Hour)
+
+	directTrips, err := s.tripRepo.SearchPublishedTrips(ctx, input.StartCity, input.EndCity, dayStart, dayEnd)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]*TicketSearchResult, 0, len(directTrips))
+	for _, trip := range directTrips {
+		if trip == nil {
+			continue
+		}
+		results = append(results, buildDirectTicketSearchResult(trip))
+	}
+
+	if !input.AllowTransfer {
+		return results, nil
+	}
+
+	allTrips, err := s.tripRepo.ListPublishedTripsByDate(ctx, dayStart, dayEnd)
+	if err != nil {
+		return nil, err
+	}
+
+	transferResults := buildTransferTicketSearchResults(input.StartCity, input.EndCity, allTrips)
+	results = append(results, transferResults...)
+
+	// 如果直达/精确中转结果较少，再补充一张“候选路线建议”卡片给 AI 和前端。
+	if len(results) < 3 {
+		suggestions := buildFuzzyRouteSuggestions(input.StartCity, input.EndCity, allTrips)
+		if len(suggestions) > 0 {
+			results = append(results, &TicketSearchResult{
+				Kind:          "suggestion",
+				StartCity:     input.StartCity,
+				EndCity:       input.EndCity,
+				DepartureTime: dayStart,
+				ArrivalTime:   dayStart,
+				Suggestions:   suggestions,
+				Status:        model.TripStatusPublished,
+			})
+		}
+	}
+
+	sortTicketSearchResults(results)
+	return results, nil
+}
+
+func (s *TicketService) GetTicketDetail(ctx context.Context, tripID uint) (*model.Trip, error) {
+	trip, err := s.tripRepo.GetByID(ctx, tripID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 只有已发布的行程才能作为票务详情展示。
+	if trip == nil || trip.Status != model.TripStatusPublished {
+		return nil, errors.New("ticket not found")
+	}
+	return trip, nil
+}
+
+func buildDirectTicketSearchResult(trip *model.Trip) *TicketSearchResult {
+	return &TicketSearchResult{
+		Kind:          "direct",
+		ID:            trip.ID,
+		StartCity:     trip.StartCity,
+		EndCity:       trip.EndCity,
+		DepartureTime: trip.DepartureTime,
+		ArrivalTime:   trip.ArrivalTime,
+		SeatAvailable: trip.SeatAvailable,
+		PriceCent:     trip.PriceCent,
+		VehicleType:   trip.VehicleType,
+		Status:        trip.Status,
+		Legs: []*TicketSearchLeg{
+			buildTicketSearchLeg(trip),
+		},
+	}
+}
+
+func buildTicketSearchLeg(trip *model.Trip) *TicketSearchLeg {
+	return &TicketSearchLeg{
+		TripID:        trip.ID,
+		StartCity:     trip.StartCity,
+		EndCity:       trip.EndCity,
+		DepartureTime: trip.DepartureTime,
+		ArrivalTime:   trip.ArrivalTime,
+		SeatAvailable: trip.SeatAvailable,
+		PriceCent:     trip.PriceCent,
+		VehicleType:   trip.VehicleType,
+	}
+}
+
+func buildTransferTicketSearchResults(startCity, endCity string, trips []*model.Trip) []*TicketSearchResult {
+	fromTrips := make([]*model.Trip, 0)
+	toTripsByStart := make(map[string][]*model.Trip)
+
+	for _, trip := range trips {
+		if trip == nil {
+			continue
+		}
+		if strings.TrimSpace(trip.StartCity) == startCity {
+			fromTrips = append(fromTrips, trip)
+		}
+		if strings.TrimSpace(trip.EndCity) == endCity {
+			tripStart := strings.TrimSpace(trip.StartCity)
+			toTripsByStart[tripStart] = append(toTripsByStart[tripStart], trip)
+		}
+	}
+
+	results := make([]*TicketSearchResult, 0)
+	seen := make(map[string]struct{})
+
+	for _, first := range fromTrips {
+		transferCity := strings.TrimSpace(first.EndCity)
+		if transferCity == "" || transferCity == startCity || transferCity == endCity {
+			continue
+		}
+
+		candidates := toTripsByStart[transferCity]
+		for _, second := range candidates {
+			if second == nil || second.ID == first.ID {
+				continue
+			}
+
+			wait := second.DepartureTime.Sub(first.ArrivalTime)
+			if wait < minTransferWait || wait > maxTransferWait {
+				continue
+			}
+
+			key := buildTransferResultKey(first, second)
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+
+			results = append(results, &TicketSearchResult{
+				Kind:               "transfer",
+				StartCity:          startCity,
+				EndCity:            endCity,
+				DepartureTime:      first.DepartureTime,
+				ArrivalTime:        second.ArrivalTime,
+				SeatAvailable:      minInt(first.SeatAvailable, second.SeatAvailable),
+				PriceCent:          first.PriceCent + second.PriceCent,
+				VehicleType:        first.VehicleType + " + " + second.VehicleType,
+				Status:             model.TripStatusPublished,
+				TransferCity:       transferCity,
+				TransferWaitMinute: int(wait / time.Minute),
+				Legs: []*TicketSearchLeg{
+					buildTicketSearchLeg(first),
+					buildTicketSearchLeg(second),
+				},
+			})
+		}
+	}
+
+	sortTicketSearchResults(results)
+	if len(results) > maxTransferPlan {
+		results = results[:maxTransferPlan]
+	}
+	return results
+}
+
+func buildFuzzyRouteSuggestions(startCity, endCity string, trips []*model.Trip) []*TicketRouteSuggestion {
+	outgoingCounts := make(map[string]int)
+	incomingCounts := make(map[string]int)
+
+	for _, trip := range trips {
+		if trip == nil {
+			continue
+		}
+		if strings.TrimSpace(trip.StartCity) == startCity {
+			candidate := strings.TrimSpace(trip.EndCity)
+			if candidate != "" && candidate != startCity && candidate != endCity {
+				outgoingCounts[candidate]++
+			}
+		}
+		if strings.TrimSpace(trip.EndCity) == endCity {
+			candidate := strings.TrimSpace(trip.StartCity)
+			if candidate != "" && candidate != startCity && candidate != endCity {
+				incomingCounts[candidate]++
+			}
+		}
+	}
+
+	suggestions := make([]*TicketRouteSuggestion, 0)
+	for city, firstLegCount := range outgoingCounts {
+		secondLegCount := incomingCounts[city]
+		if secondLegCount == 0 {
+			continue
+		}
+
+		suggestions = append(suggestions, &TicketRouteSuggestion{
+			Route:            startCity + " -> " + city + " -> " + endCity,
+			TransferCity:     city,
+			FirstLegCount:    firstLegCount,
+			SecondLegCount:   secondLegCount,
+			TotalOptionCount: firstLegCount + secondLegCount,
+			Reason:           fmt.Sprintf("当天可尝试经%s中转：%d班从%s出发，%d班可到%s。", city, firstLegCount, startCity, secondLegCount, endCity),
+		})
+	}
+
+	sort.Slice(suggestions, func(i, j int) bool {
+		left := suggestions[i]
+		right := suggestions[j]
+		if left.TotalOptionCount == right.TotalOptionCount {
+			if left.FirstLegCount == right.FirstLegCount {
+				return left.TransferCity < right.TransferCity
+			}
+			return left.FirstLegCount > right.FirstLegCount
+		}
+		return left.TotalOptionCount > right.TotalOptionCount
+	})
+
+	if len(suggestions) > maxSuggestedRoute {
+		suggestions = suggestions[:maxSuggestedRoute]
+	}
+	return suggestions
+}
+
+func sortTicketSearchResults(results []*TicketSearchResult) {
+	sort.Slice(results, func(i, j int) bool {
+		left := results[i]
+		right := results[j]
+		if left.DepartureTime.Equal(right.DepartureTime) {
+			if left.ArrivalTime.Equal(right.ArrivalTime) {
+				if left.PriceCent == right.PriceCent {
+					return left.Kind < right.Kind
+				}
+				return left.PriceCent < right.PriceCent
+			}
+			return left.ArrivalTime.Before(right.ArrivalTime)
+		}
+		return left.DepartureTime.Before(right.DepartureTime)
+	})
+}
+
+func buildTransferResultKey(first, second *model.Trip) string {
+	return strings.Join([]string{
+		first.StartCity,
+		first.EndCity,
+		second.EndCity,
+		first.DepartureTime.Format(time.RFC3339),
+		second.DepartureTime.Format(time.RFC3339),
+	}, "|")
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>班次管理 - TripVerse</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="driver">
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a class="brand" href="index.html"><span class="brand-mark">TV</span><span>TripVerse</span></a>
+      <nav class="nav-links">
+        <a data-nav="home" href="index.html">首页</a>
+        <a data-nav="search" href="search.html">购票</a>
+        <a data-nav="orders" href="orders.html">订单</a>
+        <a data-nav="profile" href="profile.html">个人中心</a>
+        <a data-nav="driver" href="driver-dashboard.html">司机端</a>
+        <a data-nav="admin" href="admin-dashboard.html">管理端</a>
+        <a data-nav="ai" href="ai-assistant.html">AI 助手</a>
+      </nav>
+      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+    </div>
+    <div class="mobile-drawer">
+      <div class="container mobile-links">
+        <a data-nav="home" data-nav-close href="index.html">首页</a>
+        <a data-nav="search" data-nav-close href="search.html">购票</a>
+        <a data-nav="orders" data-nav-close href="orders.html">订单</a>
+        <a data-nav="profile" data-nav-close href="profile.html">个人中心</a>
+        <a data-nav="driver" data-nav-close href="driver-dashboard.html">司机端</a>
+        <a data-nav="admin" data-nav-close href="admin-dashboard.html">管理端</a>
+        <a data-nav="ai" data-nav-close href="ai-assistant.html">AI 助手</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="container">
+      <div class="tab-strip">
+        <a href="driver-dashboard.html">司机首页</a>
+        <a href="driver-publish.html">发布班次</a>
+        <a class="is-active" href="driver-trips.html">班次管理</a>
+        <a href="driver-trip-detail.html">班次详情</a>
+        <a href="driver-income.html">收益页</a>
+        <a href="driver-ai.html">AI 辅助</a>
+      </div>
+
+      <section class="page-hero">
+        <span class="eyebrow">班次管理</span>
+        <h1 class="section-title">查看、编辑与关闭已发布班次</h1>
+      </section>
+
+      <section class="table-card">
+        <div class="row-between">
+          <div>
+            <h2 class="subhead">班次列表</h2>
+            <p class="muted">桌面端为表格视图，手机端可横向滚动查看关键信息。</p>
+          </div>
+          <a class="button button-primary" href="driver-publish.html">新建班次</a>
+        </div>
+        <div class="table-scroll section-block">
+          <table>
+            <thead>
+              <tr>
+                <th>班次</th>
+                <th>时间</th>
+                <th>售票</th>
+                <th>价格</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody data-driver-trip-list>
+              <tr>
+                <td>杭州东 → 苏州北</td>
+                <td>04-24 18:30</td>
+                <td>21 / 24</td>
+                <td>¥168</td>
+                <td>售卖中</td>
+                <td><a href="driver-trip-detail.html">查看详情</a></td>
+              </tr>
+              <tr>
+                <td>苏州北 → 南京南</td>
+                <td>04-24 20:10</td>
+                <td>17 / 24</td>
+                <td>¥168</td>
+                <td>售卖中</td>
+                <td><a href="driver-trip-detail.html">查看详情</a></td>
+              </tr>
+              <tr>
+                <td>南京南 → 上海虹桥</td>
+                <td>04-24 21:40</td>
+                <td>19 / 24</td>
+                <td>¥160</td>
+                <td>即将发车</td>
+                <td><a href="driver-trip-detail.html">查看详情</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer"><div class="container footer-card">班次管理页走表格化设计，便于后续叠加筛选、批量操作和状态流转。</div></footer>
+  <script src="assets/runtime-config.js?v=20260501-frontend-link"></script>
+  <script src="assets/app.js?v=20260501-frontend-link"></script>
+</body>
+</html>

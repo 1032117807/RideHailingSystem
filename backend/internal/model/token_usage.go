@@ -1,0 +1,33 @@
+package model
+
+import "time"
+
+const (
+	TokenUsageKindChat      = "chat"
+	TokenUsageKindEmbedding = "embedding"
+	TokenUsageKindRerank    = "rerank"
+
+	TokenFeaturePassengerAI     = "passenger_ai"
+	TokenFeatureDriverAIDraft   = "driver_ai_draft"
+	TokenFeatureKnowledgeIngest = "knowledge_ingest"
+	TokenFeatureKnowledgeSearch = "knowledge_search"
+)
+
+type TokenUsage struct {
+	ID               uint      `gorm:"primaryKey" json:"id"`
+	UserID           uint      `gorm:"index;not null" json:"userId"`
+	Role             string    `gorm:"size:20;not null;index" json:"role"`
+	Feature          string    `gorm:"size:50;not null;index" json:"feature"`
+	RequestKind      string    `gorm:"size:20;not null;index" json:"requestKind"`
+	Provider         string    `gorm:"size:50;not null" json:"provider"`
+	Model            string    `gorm:"size:100;not null;index" json:"model"`
+	PromptTokens     int       `gorm:"not null;default:0" json:"promptTokens"`
+	CompletionTokens int       `gorm:"not null;default:0" json:"completionTokens"`
+	TotalTokens      int       `gorm:"not null;default:0" json:"totalTokens"`
+	RequestCount     int       `gorm:"not null;default:1" json:"requestCount"`
+	CreatedAt        time.Time `gorm:"index" json:"createdAt"`
+}
+
+func (TokenUsage) TableName() string {
+	return "token_usages"
+}

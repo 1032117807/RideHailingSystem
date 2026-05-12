@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>发布班次 - TripVerse</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="driver">
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a class="brand" href="index.html"><span class="brand-mark">TV</span><span>TripVerse</span></a>
+      <nav class="nav-links">
+        <a data-nav="home" href="index.html">首页</a>
+        <a data-nav="search" href="search.html">购票</a>
+        <a data-nav="orders" href="orders.html">订单</a>
+        <a data-nav="profile" href="profile.html">个人中心</a>
+        <a data-nav="driver" href="driver-dashboard.html">司机端</a>
+        <a data-nav="admin" href="admin-dashboard.html">管理端</a>
+        <a data-nav="ai" href="ai-assistant.html">AI 助手</a>
+      </nav>
+      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+    </div>
+    <div class="mobile-drawer">
+      <div class="container mobile-links">
+        <a data-nav="home" data-nav-close href="index.html">首页</a>
+        <a data-nav="search" data-nav-close href="search.html">购票</a>
+        <a data-nav="orders" data-nav-close href="orders.html">订单</a>
+        <a data-nav="profile" data-nav-close href="profile.html">个人中心</a>
+        <a data-nav="driver" data-nav-close href="driver-dashboard.html">司机端</a>
+        <a data-nav="admin" data-nav-close href="admin-dashboard.html">管理端</a>
+        <a data-nav="ai" data-nav-close href="ai-assistant.html">AI 助手</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="container">
+      <div class="tab-strip">
+        <a href="driver-dashboard.html">司机首页</a>
+        <a class="is-active" href="driver-publish.html">发布班次</a>
+        <a href="driver-trips.html">班次管理</a>
+        <a href="driver-trip-detail.html">班次详情</a>
+        <a href="driver-income.html">收益页</a>
+        <a href="driver-ai.html">AI 辅助</a>
+      </div>
+
+      <section class="page-hero">
+        <div class="row-between">
+          <div>
+            <span class="eyebrow">发布班次</span>
+            <h1 class="section-title">快速创建一条新的可售班次</h1>
+          </div>
+          <button class="button button-secondary" type="button" data-fill-trip>AI 生成草稿</button>
+        </div>
+      </section>
+
+      <section class="split-grid">
+        <article class="panel">
+          <div class="form-grid" data-driver-publish-form>
+            <div class="field span-6">
+              <label>班次名称</label>
+              <input name="tripName" type="text" placeholder="例如：杭州东 - 苏州北 晚间班线">
+            </div>
+            <div class="field span-6">
+              <label>出发时间</label>
+              <input name="depart" type="datetime-local">
+            </div>
+            <div class="field span-6">
+              <label>起点</label>
+              <input name="start" type="text">
+            </div>
+            <div class="field span-6">
+              <label>终点</label>
+              <input name="end" type="text">
+            </div>
+            <div class="field span-4">
+              <label>票价</label>
+              <input name="price" type="number">
+            </div>
+            <div class="field span-4">
+              <label>总座位数</label>
+              <input name="seats" type="number">
+            </div>
+            <div class="field span-4">
+              <label>车辆类型</label>
+              <select name="vehicleType">
+                <option>商务大巴</option>
+                <option>城际快线</option>
+                <option>拼车专线</option>
+              </select>
+            </div>
+            <div class="field span-12">
+              <label>途经站点</label>
+              <input name="stops" type="text" placeholder="用顿号或逗号分隔">
+            </div>
+            <div class="field span-12">
+              <label>补充说明</label>
+              <textarea name="remark">支持携带 20 寸行李箱，车内提供 USB 充电口和瓶装水。</textarea>
+            </div>
+          </div>
+        </article>
+
+        <aside class="panel">
+          <h2 class="subhead">发布建议</h2>
+          <div class="list-stack section-block">
+            <div class="info-card">
+              <strong>价格区间</strong>
+              <p class="muted">当前同路线晚间班线平均售价在 ¥158-¥176，建议根据上座率动态调整。</p>
+            </div>
+            <div class="info-card">
+              <strong>站点设计</strong>
+              <p class="muted">途经站点不宜超过 3 个，否则会明显拉长总时长并降低转化率。</p>
+            </div>
+            <div class="info-card">
+              <strong>审核状态</strong>
+              <p class="muted">发布后可进入待审核队列，或根据权限直接上架销售。</p>
+            </div>
+          </div>
+          <div class="button-row section-block">
+            <button class="button button-primary" type="button" data-submit-trip>提交发布</button>
+            <button class="button button-ghost" type="button" data-toast="班次草稿已保存">保存草稿</button>
+          </div>
+        </aside>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer"><div class="container footer-card">发布页同时支持手工填写和 AI 生成草稿，方便司机用手机快速补齐信息。</div></footer>
+  <script src="assets/runtime-config.js?v=20260501-frontend-link"></script>
+  <script src="assets/app.js?v=20260501-frontend-link"></script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+package service
+
+
+import (
+	"context"
+	"errors"
+	"sort"
+	"strings"
+	"time"
+
+	"ridehailing/backend/internal/model"
+	"ridehailing/backend/internal/repository"
+)
+
+type TripStopInput struct {
+	StopOrder         int
+	StopName          string
+	PlanArrivalTime   *time.Time
+	PlanDepartureTime *time.Time
+}
+
+type CreateTripInput struct {
+	VehicleType   string
+	StartCity     string
+	EndCity       string
+	DepartureTime time.Time
+	ArrivalTime   time.Time
+	SeatTotal     int
+	PriceCent     int
+	Stops         []TripStopInput
+}
+
+type TripService struct {
+	tripRepo repository.TripRepository
+}
+
+func NewTripService(tripRepo repository.TripRepository) *TripService {
+	return &TripService{tripRepo: tripRepo}
+}
+
+// 司机创建行程
+func (s *TripService) CreateTrip(ctx context.Context, currentUserID uint, currentUserRole string, input CreateTripInput) (*model.Trip, error) {
+	if currentUserRole != model.RoleDriver {
+		return nil, errors.New("only driver can create trip")
+	}
+
+	input.VehicleType = strings.TrimSpace(input.VehicleType)
+	input.StartCity = strings.TrimSpace(input.StartCity)
+	input.EndCity = strings.TrimSpace(input.EndCity)
+
+	if input.VehicleType == "" {
+		input.VehicleType = model.VehicleTypeCar
+	}
+	if input.StartCity == "" || input.EndCity == "" {
+		return nil, errors.New("startCity and endCity are required")
+	}
+	if input.StartCity == input.EndCity {
+		return nil, errors.New("startCity and endCity cannot be the same")
+	}
+	if !input.ArrivalTime.After(input.DepartureTime) {
+		return nil, errors.New("arrivalTime must be later than departureTime")
+	}
+	if input.SeatTotal <= 0 {
+		return nil, errors.New("seatTotal must be greater than 0")
+	}
+	if input.PriceCent <= 0 {
+		return nil, errors.New("priceCent must be greater than 0")
+	}
+
+	stops := make([]model.TripStop, 0, len(input.Stops))
+	seenOrders := make(map[int]struct{}, len(input.Stops))
+	for _, stop := range input.Stops {
+		stop.StopName = strings.TrimSpace(stop.StopName)
+		if stop.StopOrder <= 0 {
+			return nil, errors.New("stopOrder must be greater than 0")
+		}
+		if stop.StopName == "" {
+			return nil, errors.New("stopName is required")
+		}
+		if _, exists := seenOrders[stop.StopOrder]; exists {
+			return nil, errors.New("stopOrder cannot repeat")
+		}
+		seenOrders[stop.StopOrder] = struct{}{}
+
+		stops = append(stops, model.TripStop{
+			StopOrder:         stop.StopOrder,
+			StopName:          stop.StopName,
+			PlanArrivalTime:   stop.PlanArrivalTime,
+			PlanDepartureTime: stop.PlanDepartureTime,
+		})
+	}
+
+	sort.Slice(stops, func(i, j int) bool {
+		return stops[i].StopOrder < stops[j].StopOrder
+	})
+
+	trip := &model.Trip{
+		DriverID:      currentUserID,
+		VehicleType:   input.VehicleType,
+		StartCity:     input.StartCity,
+		EndCity:       input.EndCity,
+		DepartureTime: input.DepartureTime,
+		ArrivalTime:   input.ArrivalTime,
+		SeatTotal:     input.SeatTotal,
+		SeatAvailable: input.SeatTotal,
+		PriceCent:     input.PriceCent,
+		Status:        model.TripStatusPublished,
+	}
+
+	if err := s.tripRepo.CreateWithStops(ctx, trip, stops); err != nil {
+		return nil, err
+	}
+	return trip, nil
+}
+
+// 司机查询自己的行程列表
+func (s *TripService) ListDriverTrips(ctx context.Context, currentUserID uint, currentUserRole string) ([]*model.Trip, error) {
+	if currentUserRole != model.RoleDriver {
+		return nil, errors.New("only driver can view driver trips")
+	}
+	return s.tripRepo.ListByDriverID(ctx, currentUserID)
+}
+
+func (s *TripService) GetDriverTripDetail(ctx context.Context, currentUserID uint, currentUserRole string, tripID uint) (*model.Trip, error) {
+	if currentUserRole != model.RoleDriver {
+		return nil, errors.New("only driver can view driver trip detail")
+	}
+
+	trip, err := s.tripRepo.GetByID(ctx, tripID)
+	if err != nil {
+		return nil, err
+	}
+	if trip == nil {
+		return nil, errors.New("trip not found")
+	}
+	if trip.DriverID != currentUserID {
+		return nil, errors.New("trip does not belong to current driver")
+	}
+	return trip, nil
+}

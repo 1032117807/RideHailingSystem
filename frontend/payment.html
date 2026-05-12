@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>支付页 - TripVerse</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="orders">
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a class="brand" href="index.html"><span class="brand-mark">TV</span><span>TripVerse</span></a>
+      <nav class="nav-links"></nav>
+      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+    </div>
+    <div class="mobile-drawer">
+      <div class="container mobile-links"></div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="container">
+      <section class="page-hero">
+        <span class="eyebrow">支付页</span>
+        <h1 class="section-title" data-payment-title>订单支付加载中...</h1>
+        <p class="lede" data-payment-lede>正在读取订单信息。</p>
+      </section>
+
+      <section class="split-grid">
+        <article class="panel">
+          <h2 class="subhead">支付方式</h2>
+          <div class="card-grid section-block">
+            <div class="panel">
+              <strong>模拟微信支付</strong>
+              <p class="muted">用于演示支付链路，后续可以替换为真实微信支付二维码。</p>
+            </div>
+            <div class="panel">
+              <strong>模拟支付宝</strong>
+              <p class="muted">用于演示状态流转，后续可以替换为真实支付宝收银台。</p>
+            </div>
+            <div class="panel">
+              <strong>支付回调</strong>
+              <p class="muted">当前通过模拟成功按钮触发，后续可以接网关异步通知。</p>
+            </div>
+          </div>
+          <div class="button-row section-block" data-payment-actions>
+            <a class="button button-secondary" href="orders.html">返回订单列表</a>
+          </div>
+        </article>
+
+        <aside class="panel">
+          <h2 class="subhead">支付摘要</h2>
+          <div class="list-stack section-block" data-payment-summary>
+            <div class="list-item">
+              <strong>支付说明</strong>
+              <div class="list-meta"><span>正在加载</span><span>--</span></div>
+            </div>
+          </div>
+          <div class="list-stack section-block" data-payment-order>
+            <div class="list-item">
+              <strong>订单信息</strong>
+              <div class="list-meta"><span>正在加载</span><span>--</span></div>
+            </div>
+          </div>
+          <div class="pricing-box section-block" data-payment-amount>
+            <div class="pricing-row"><span>订单金额</span><strong>--</strong></div>
+            <div class="pricing-row"><span>支付状态</span><strong>--</strong></div>
+            <div class="pricing-row pricing-total"><span>订单状态</span><strong>--</strong></div>
+          </div>
+        </aside>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer"><div class="container footer-card">当前为支付 MVP：创建支付单、查询状态、模拟成功回调都已接好，后续只需替换支付网关实现。</div></footer>
+  <script src="assets/runtime-config.js?v=20260507-payment-expire"></script>
+  <script src="assets/app.js?v=20260507-payment-expire"></script>
+</body>
+</html>

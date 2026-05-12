@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用户管理 - TripVerse</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body data-page="admin">
+  <header class="site-header">
+    <div class="container nav-shell">
+      <a class="brand" href="index.html"><span class="brand-mark">TV</span><span>TripVerse</span></a>
+      <nav class="nav-links"></nav>
+      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+    </div>
+    <div class="mobile-drawer">
+      <div class="container mobile-links"></div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="container">
+      <div class="tab-strip">
+        <a href="admin-dashboard.html">后台首页</a>
+        <a class="is-active" href="admin-users.html">用户管理</a>
+        <a href="admin-orders.html">订单管理</a>
+        <a href="admin-tokens.html">Token 管理</a>
+        <a href="admin-risk.html">风控监控</a>
+        <a href="admin-models.html">模型配置</a>
+        <a href="admin-knowledge.html">知识库管理</a>
+        <a href="admin-mcp.html">MCP 工具管理</a>
+      </div>
+
+      <section class="page-hero">
+        <div class="row-between">
+          <div>
+            <span class="eyebrow">用户管理</span>
+            <h1 class="section-title">真实用户状态、角色与实名信息</h1>
+            <p class="muted">页面直接读取后端用户数据，并支持按角色、状态筛选，以及管理员调整角色和账号状态。</p>
+          </div>
+          <div class="chip-row" data-admin-user-summary>
+            <span class="mini-chip">加载中...</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel section-block">
+        <form class="search-card" data-admin-user-filter>
+          <div class="form-grid">
+            <div class="field span-6">
+              <label for="admin-user-keyword">关键词</label>
+              <input id="admin-user-keyword" name="keyword" type="text" placeholder="手机号 / 昵称 / 邮箱 / 实名">
+            </div>
+            <div class="field span-3">
+              <label for="admin-user-role">角色</label>
+              <select id="admin-user-role" name="role">
+                <option value="">全部角色</option>
+                <option value="passenger">乘客</option>
+                <option value="driver">司机</option>
+                <option value="admin">管理员</option>
+              </select>
+            </div>
+            <div class="field span-3">
+              <label for="admin-user-status">状态</label>
+              <select id="admin-user-status" name="status">
+                <option value="">全部状态</option>
+                <option value="active">正常</option>
+                <option value="frozen">冻结</option>
+                <option value="disabled">禁用</option>
+              </select>
+            </div>
+            <div class="button-row span-12">
+              <button class="button button-primary" type="submit">查询用户</button>
+              <button class="button button-ghost" type="button" data-admin-user-reset>重置筛选</button>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <section class="table-card">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>用户</th>
+                <th>手机号</th>
+                <th>角色</th>
+                <th>状态</th>
+                <th>邮箱</th>
+                <th>实名</th>
+                <th>注册时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody data-admin-user-list>
+              <tr>
+                <td colspan="8">正在加载用户列表...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section-block">
+        <article class="info-card" data-admin-user-empty-state>
+          <strong>等待加载</strong>
+          <p class="muted">正在从后端读取用户统计和用户列表。</p>
+        </article>
+      </section>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-card">用户管理页已接入后端真实数据，并支持管理员直接维护账号角色与状态。</div>
+  </footer>
+
+  <script src="assets/runtime-config.js?v=20260507-admin-users-v2"></script>
+  <script src="assets/app.js?v=20260507-admin-users-v2"></script>
+</body>
+</html>
