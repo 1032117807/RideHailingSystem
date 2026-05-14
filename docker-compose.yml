@@ -1,0 +1,74 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: hyh
+      MYSQL_DATABASE: ridehailing_demo
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./backend/sql/ridehailing_demo_seed.sql:/docker-entrypoint-initdb.d/01-ridehailing_demo_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      SERVER_ADDR: ":8081"
+      MYSQL_DSN: "root:hyh@tcp(mysql:3306)/ridehailing_demo?charset=utf8mb4&parseTime=True&loc=Local"
+      REDIS_ADDR: "redis:6379"
+      REDIS_PASSWORD: ""
+      REDIS_DB: "0"
+      JWT_SECRET: "change-this-secret-before-production"
+      KNOWLEDGE_MEMORY_DIR: "/app/memory"
+      ENABLE_MOCK_PAYMENT: "true"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}"
+      OPENAI_MODEL: "${OPENAI_MODEL:-qwen-plus}"
+      EMBEDDING_API_KEY: "${EMBEDDING_API_KEY:-}"
+      EMBEDDING_BASE_URL: "${EMBEDDING_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}"
+      EMBEDDING_MODEL: "${EMBEDDING_MODEL:-text-embedding-v3}"
+      RERANK_API_KEY: "${RERANK_API_KEY:-}"
+      RERANK_BASE_URL: "${RERANK_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}"
+      RERANK_MODEL: "${RERANK_MODEL:-rerank-v1}"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - backend-memory:/app/memory
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  mysql-data:
+  redis-data:
+  backend-memory:
