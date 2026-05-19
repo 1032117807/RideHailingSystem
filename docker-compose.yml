@@ -67,8 +67,6 @@ services:
     image: localhost/ridehailingsystem_frontend:latest
     build:
       context: ./frontend
-    depends_on:
-      - backend
     ports:
       - "8080:80"
 
