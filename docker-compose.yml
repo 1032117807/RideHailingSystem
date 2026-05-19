@@ -55,11 +55,6 @@ services:
       RERANK_API_KEY: "${RERANK_API_KEY:-}"
       RERANK_BASE_URL: "${RERANK_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}"
       RERANK_MODEL: "${RERANK_MODEL:-rerank-v1}"
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     volumes:
       - backend-memory:/app/memory
 

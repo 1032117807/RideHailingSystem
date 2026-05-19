@@ -36,9 +36,7 @@ func main() {
 		},
 	)
 
-	db, err := gorm.Open(mysql.Open(cfg.MySQLDSN), &gorm.Config{
-		Logger: gormLogger,
-	})
+	db, err := connectMySQLWithRetry(cfg.MySQLDSN, gormLogger)
 	if err != nil {
 		log.Fatalf("connect mysql failed: %v", err)
 	}
@@ -209,4 +207,34 @@ func main() {
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server start failed: %v", err)
 	}
+}
+
+func connectMySQLWithRetry(dsn string, gormLogger logger.Interface) (*gorm.DB, error) {
+	var lastErr error
+
+	for attempt := 1; attempt <= 30; attempt++ {
+		db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+			Logger: gormLogger,
+		})
+		if err == nil {
+			sqlDB, dbErr := db.DB()
+			if dbErr == nil {
+				err = sqlDB.Ping()
+			} else {
+				err = dbErr
+			}
+		}
+		if err == nil {
+			if attempt > 1 {
+				log.Printf("mysql connected after %d attempts", attempt)
+			}
+			return db, nil
+		}
+
+		lastErr = err
+		log.Printf("mysql is not ready, retrying in 2s (%d/30): %v", attempt, err)
+		time.Sleep(2 * time.Second)
+	}
+
+	return nil, lastErr
 }

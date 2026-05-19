@@ -35,7 +35,14 @@ podman-compose up -d --build
 
 如果上一次构建在 `go mod download` 阶段超时，后端镜像不会生成，Podman 可能会继续尝试从远程拉取 `ridehailingsystem_backend`。本项目已在 `docker-compose.yml` 中显式使用 `localhost/ridehailingsystem_backend:latest` 和 `localhost/ridehailingsystem_frontend:latest`，重新构建前先 `podman-compose down` 可以清理失败状态。
 
-Podman Compose 1.0.x 对嵌套 `depends_on` 会生成 `--requires` 依赖图，某些版本在重建时可能报 `depends on container ... not found in input list`。前端只是 Nginx 静态服务，请求后端时由 Nginx 通过服务名代理，因此前端不需要容器级 `depends_on`。
+Podman Compose 1.0.x 会把 `depends_on` 转成 Podman 的 `--requires` 硬依赖，某些版本在重建时可能报 `dependent containers must be removed before it` 或 `depends on container ... not found in input list`。本项目已去掉容器级 `depends_on`，后端会在启动时等待 MySQL 可用。
+
+如果服务器上已经留下旧的 `--requires` 依赖容器，先按依赖顺序强制清理一次，数据卷不会被删除：
+
+```bash
+podman rm -f ridehailingsystem_frontend_1 ridehailingsystem_backend_1 ridehailingsystem_redis_1 ridehailingsystem_mysql_1
+podman-compose up -d --build
+```
 
 启动完成后访问：
 
