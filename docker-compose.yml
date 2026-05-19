@@ -32,8 +32,11 @@ services:
       retries: 10
 
   backend:
+    image: localhost/ridehailingsystem_backend:latest
     build:
       context: ./backend
+      args:
+        GOPROXY: "${GOPROXY:-https://goproxy.cn,direct}"
     environment:
       SERVER_ADDR: ":8081"
       MYSQL_DSN: "root:hyh@tcp(mysql:3306)/ridehailing_demo?charset=utf8mb4&parseTime=True&loc=Local"
@@ -61,6 +64,7 @@ services:
       - backend-memory:/app/memory
 
   frontend:
+    image: localhost/ridehailingsystem_frontend:latest
     build:
       context: ./frontend
     depends_on:

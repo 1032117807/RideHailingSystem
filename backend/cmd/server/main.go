@@ -50,7 +50,25 @@ func main() {
 		sqlDB.SetConnMaxLifetime(time.Hour)
 	}
 
-	if err := db.AutoMigrate(&model.User{}, &model.Trip{}, &model.TripStop{}, &model.Order{}, &model.Payment{}, &model.Notification{}, &model.TokenUsage{}, &model.RiskEvent{}); err != nil {
+	if err := db.AutoMigrate(
+		&model.User{},
+		&model.Trip{},
+		&model.TripStop{},
+		&model.Order{},
+		&model.Payment{},
+		&model.Notification{},
+		&model.TokenUsage{},
+		&model.RiskEvent{},
+		&model.ElectronicTicket{},
+		&model.TicketVerification{},
+		&model.RefundAuditLog{},
+		&model.AuditLog{},
+		&model.Passenger{},
+		&model.PriceAlert{},
+		&model.DriverProfile{},
+		&model.Vehicle{},
+		&model.DriverSettlement{},
+	); err != nil {
 		log.Fatalf("auto migrate failed: %v", err)
 	}
 
@@ -65,6 +83,11 @@ func main() {
 	orderRepo := repository.NewGormOrderRepository(db)
 	paymentRepo := repository.NewGormPaymentRepository(db)
 	notificationRepo := repository.NewGormNotificationRepository(db)
+	electronicTicketRepo := repository.NewGormElectronicTicketRepository(db)
+	auditRepo := repository.NewGormAuditRepository(db)
+	passengerRepo := repository.NewGormPassengerRepository(db)
+	priceAlertRepo := repository.NewGormPriceAlertRepository(db)
+	driverProfileRepo := repository.NewGormDriverProfileRepository(db)
 	codeRepo := repository.NewRedisCodeRepository(redisClient, cfg.RedisKeyPrefix)
 	aiLimiter := repository.NewRedisAIRateLimiter(redisClient, cfg.AIRateLimitPrefix)
 	tokenUsageRepo := repository.NewTokenUsageRepository(db)
@@ -77,8 +100,13 @@ func main() {
 	userService := service.NewUserService(userRepo)
 	ticketService := service.NewTicketService(tripRepo)
 	notificationService := service.NewNotificationService(notificationRepo)
-	orderService := service.NewOrderService(orderRepo, tripRepo, userRepo, paymentRepo, notificationRepo)
+	electronicTicketService := service.NewElectronicTicketService(electronicTicketRepo, orderRepo, cfg.JWTSecret)
+	orderService := service.NewOrderService(orderRepo, tripRepo, userRepo, paymentRepo, notificationRepo, auditRepo, electronicTicketService)
 	tripService := service.NewTripService(tripRepo, orderRepo)
+	auditService := service.NewAuditService(auditRepo)
+	passengerService := service.NewPassengerService(passengerRepo)
+	priceAlertService := service.NewPriceAlertService(priceAlertRepo)
+	driverProfileService := service.NewDriverProfileService(driverProfileRepo)
 	tokenUsageService := service.NewTokenUsageService(tokenUsageRepo)
 	riskService := service.NewRiskService(riskEventRepo, tokenUsageRepo)
 	knowledgeService := service.NewKnowledgeService(
@@ -106,7 +134,7 @@ func main() {
 		knowledgeService,
 		tokenUsageService,
 	)
-	paymentService := service.NewPaymentService(paymentRepo, orderRepo)
+	paymentService := service.NewPaymentService(paymentRepo, orderRepo, electronicTicketService)
 
 	authHandler := handler.NewAuthHandler(authService)
 	userHandler := handler.NewUserHandler(userService)
@@ -124,23 +152,33 @@ func main() {
 	orderHandler := handler.NewOrderHandler(orderService)
 	paymentHandler := handler.NewPaymentHandler(paymentService)
 	notificationHandler := handler.NewNotificationHandler(notificationService)
+	electronicTicketHandler := handler.NewElectronicTicketHandler(electronicTicketService)
+	auditHandler := handler.NewAuditHandler(auditService)
+	passengerHandler := handler.NewPassengerHandler(passengerService)
+	priceAlertHandler := handler.NewPriceAlertHandler(priceAlertService)
+	driverProfileHandler := handler.NewDriverProfileHandler(driverProfileService)
 	knowledgeHandler := handler.NewKnowledgeHandler(knowledgeService)
 	riskHandler := handler.NewRiskHandler(riskService)
 
 	appRouter := router.NewRouter(router.Dependencies{
-		AuthHandler:         authHandler,
-		UserHandler:         userHandler,
-		DriverTripHandler:   driverTripHandler,
-		AIHandler:           aiHandler,
-		KnowledgeHandler:    knowledgeHandler,
-		RiskHandler:         riskHandler,
-		TicketHandler:       ticketHandler,
-		OrderHandler:        orderHandler,
-		PaymentHandler:      paymentHandler,
-		NotificationHandler: notificationHandler,
-		AuthMiddleware:      middleware.AuthMiddleware(jwtManager),
-		EnableMockPayment:   cfg.EnableMockPayment,
-		TokenUsageHandler:   tokenUsageHandler,
+		AuthHandler:             authHandler,
+		UserHandler:             userHandler,
+		DriverTripHandler:       driverTripHandler,
+		AIHandler:               aiHandler,
+		KnowledgeHandler:        knowledgeHandler,
+		RiskHandler:             riskHandler,
+		TicketHandler:           ticketHandler,
+		OrderHandler:            orderHandler,
+		PaymentHandler:          paymentHandler,
+		NotificationHandler:     notificationHandler,
+		ElectronicTicketHandler: electronicTicketHandler,
+		AuditHandler:            auditHandler,
+		PassengerHandler:        passengerHandler,
+		PriceAlertHandler:       priceAlertHandler,
+		DriverProfileHandler:    driverProfileHandler,
+		AuthMiddleware:          middleware.AuthMiddleware(jwtManager),
+		EnableMockPayment:       cfg.EnableMockPayment,
+		TokenUsageHandler:       tokenUsageHandler,
 	})
 
 	server := &http.Server{

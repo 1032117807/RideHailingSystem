@@ -1,0 +1,393 @@
+{
+    "setup_data": {
+        "adminToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInJvbGUiOiJhZG1pbiIsInBob25lIjoiMTg4MDAwMDAwMDAiLCJlbWFpbCI6ImFkbWluX3Jvb3RAdHJpcHZlcnNlLmxvY2FsIiwiaXNzIjoicmlkZWhhaWxpbmctYmFja2VuZCIsInN1YiI6IjEiLCJleHAiOjE3NzkzMTQyNTEsIm5iZiI6MTc3ODcwOTQ1MSwiaWF0IjoxNzc4NzA5NDUxfQ.N2zIwlptz4OJqyEKMi6rJMyeffyzY4H42ZNawlG27EQ",
+        "driverToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjI1Nywicm9sZSI6ImRyaXZlciIsInBob25lIjoiMTUwMDAwMDAwMDEiLCJlbWFpbCI6ImRyaXZlcjAwMUB0cmlwdmVyc2UubG9jYWwiLCJpc3MiOiJyaWRlaGFpbGluZy1iYWNrZW5kIiwic3ViIjoiMjU3IiwiZXhwIjoxNzc5MzE0MjUxLCJuYmYiOjE3Nzg3MDk0NTEsImlhdCI6MTc3ODcwOTQ1MX0.R8BizrMAlgR9V2XvcIW_Mt0uSNRGzvRXuY6c8TTVt_8",
+        "passengerToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIsInJvbGUiOiJwYXNzZW5nZXIiLCJwaG9uZSI6IjEzMDAwMDAwMDAxIiwiZW1haWwiOiJwYXNzZW5nZXIwMDFAdHJpcHZlcnNlLmxvY2FsIiwiaXNzIjoicmlkZWhhaWxpbmctYmFja2VuZCIsInN1YiI6IjIiLCJleHAiOjE3NzkzMTQyNTEsIm5iZiI6MTc3ODcwOTQ1MSwiaWF0IjoxNzc4NzA5NDUxfQ.1GQGzp9O1q3Ar5p6Ap3q34iWDBG09KbKcUExODcsFOM",
+        "ticketId": 257
+    },
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {
+            "setup": {
+                "name": "setup",
+                "path": "::setup",
+                "id": "5c0f8025f7e0b6654089e5b00e950f1a",
+                "groups": {},
+                "checks": {
+                        "status in 200": {
+                            "name": "status in 200",
+                            "path": "::setup::status in 200",
+                            "id": "e8e159b65f56e9111bb08cc8df6fabf5",
+                            "passes": 4,
+                            "fails": 0
+                        }
+                    }
+            },
+            "public ticket APIs": {
+                "name": "public ticket APIs",
+                "path": "::public ticket APIs",
+                "id": "9fb708d7fc95535cf24db44170c4ad29",
+                "groups": {},
+                "checks": {
+                        "status in 200": {
+                            "passes": 3310,
+                            "fails": 0,
+                            "name": "status in 200",
+                            "path": "::public ticket APIs::status in 200",
+                            "id": "1f6b949211663ef9dfe27717e37c97aa"
+                        },
+                        "status in 200/404": {
+                            "fails": 0,
+                            "name": "status in 200/404",
+                            "path": "::public ticket APIs::status in 200/404",
+                            "id": "6fb9c006f9c8e7fab9dcf95aaf967dc1",
+                            "passes": 1655
+                        }
+                    }
+            },
+            "passenger read APIs": {
+                "checks": {
+                    "status in 200": {
+                        "name": "status in 200",
+                        "path": "::passenger read APIs::status in 200",
+                        "id": "b968cb4a0a535b9634e8ae1825e3dd38",
+                        "passes": 9930,
+                        "fails": 0
+                    }
+                },
+                "name": "passenger read APIs",
+                "path": "::passenger read APIs",
+                "id": "ed01418bcd6473916c0328ea31ad65cc",
+                "groups": {}
+            },
+            "driver read APIs": {
+                "checks": {
+                    "status in 200": {
+                        "fails": 0,
+                        "name": "status in 200",
+                        "path": "::driver read APIs::status in 200",
+                        "id": "6a8934cad2756020fac2dcd0e6869a4f",
+                        "passes": 4962
+                    }
+                },
+                "name": "driver read APIs",
+                "path": "::driver read APIs",
+                "id": "7a4d058b238c37d9ff94a9a8c0e20a63",
+                "groups": {}
+            },
+            "admin read APIs": {
+                "id": "041d850cdf76fa118bbb1fa2336588b2",
+                "groups": {},
+                "checks": {
+                        "status in 200": {
+                            "fails": 0,
+                            "name": "status in 200",
+                            "path": "::admin read APIs::status in 200",
+                            "id": "4487978b223db22ed53633df687a52cb",
+                            "passes": 11379
+                        }
+                    },
+                "name": "admin read APIs",
+                "path": "::admin read APIs"
+            }
+        },
+        "checks": {}
+    },
+    "metrics": {
+        "data_received": {
+            "count": 2026276443,
+            "rate": 16098116.98129393
+        },
+        "http_req_connecting": {
+            "max": 47.9998,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0.016014929577464795,
+            "min": 0,
+            "med": 0
+        },
+        "group_duration": {
+            "max": 7453.5047,
+            "p(90)": 5311.2537600000005,
+            "p(95)": 5743.1706,
+            "avg": 2457.1143722501142,
+            "min": 6.5236,
+            "med": 1535.0012
+        },
+        "endpoint_passenger_notifications_my": {
+            "p(90)": 221.48212,
+            "p(95)": 256.50109,
+            "avg": 133.5263616918432,
+            "min": 0.4261,
+            "med": 133.9195,
+            "max": 561.5028
+        },
+        "endpoint_admin_tokens": {
+            "max": 1087.5204,
+            "p(90)": 465.1024,
+            "p(95)": 525.9093,
+            "avg": 311.2767952498457,
+            "min": 15.4987,
+            "med": 325.4893
+        },
+        "endpoint_driver_income": {
+            "max": 3566.9392,
+            "p(90)": 2469.84783,
+            "p(95)": 2919.1662199999996,
+            "avg": 1719.3126065980662,
+            "min": 5.4971,
+            "med": 1917.9697500000002
+        },
+        "iteration_duration": {
+            "min": 1118.5042,
+            "med": 12413.743050000001,
+            "max": 16309.4612,
+            "p(90)": 15198.517650000003,
+            "p(95)": 15832.51872,
+            "avg": 10901.782997358492
+        },
+        "http_req_duration": {
+            "max": 3572.7885,
+            "p(90)": 1646.5794100000007,
+            "p(95)": 2032.00364,
+            "avg": 518.9629382266329,
+            "min": 0.4261,
+            "med": 259.56045,
+            "thresholds": {
+                "p(95)<1000": true
+            }
+        },
+        "http_req_duration{expected_response:true}": {
+            "med": 259.56045,
+            "max": 3572.7885,
+            "p(90)": 1646.5794100000007,
+            "p(95)": 2032.00364,
+            "avg": 518.9629382266329,
+            "min": 0.4261
+        },
+        "http_req_sending": {
+            "p(90)": 0,
+            "p(95)": 0.3349049999999999,
+            "avg": 0.033826366837387996,
+            "min": 0,
+            "med": 0,
+            "max": 12.9985
+        },
+        "vus": {
+            "value": 23,
+            "min": 1,
+            "max": 200
+        },
+        "iterations": {
+            "rate": 12.632040454638672,
+            "count": 1590
+        },
+        "http_reqs": {
+            "count": 31240,
+            "rate": 248.19178855529063
+        },
+        "endpoint_passenger_unread_count": {
+            "p(95)": 261.24390999999997,
+            "avg": 133.31955697885206,
+            "min": 0.4959,
+            "med": 134.963,
+            "max": 573.9558,
+            "p(90)": 222.4362200000001
+        },
+        "data_sent": {
+            "rate": 102712.01868545407,
+            "count": 12928403
+        },
+        "endpoint_public_ticket_detail": {
+            "med": 278.9993,
+            "max": 1018.4864,
+            "p(90)": 416.89228,
+            "p(95)": 463.92881,
+            "avg": 261.29514592145006,
+            "min": 0.9671
+        },
+        "endpoint_admin_users_summary": {
+            "avg": 1043.8923116707617,
+            "min": 2.5,
+            "med": 1155.4631,
+            "max": 2535.0186,
+            "p(90)": 1536.2554499999999,
+            "p(95)": 1792.2000799999992
+        },
+        "endpoint_admin_risk_logs": {
+            "min": 3.9989,
+            "med": 722.9995,
+            "max": 1926.0139,
+            "p(90)": 983.94154,
+            "p(95)": 1116.3992399999997,
+            "avg": 658.6325324458192
+        },
+        "endpoint_admin_dashboard": {
+            "avg": 1443.0553646163196,
+            "min": 3.9995,
+            "med": 1628.9384,
+            "max": 3254.8391,
+            "p(90)": 2085.92837,
+            "p(95)": 2422.5944749999985
+        },
+        "vus_max": {
+            "value": 200,
+            "min": 200,
+            "max": 200
+        },
+        "tripverse_req_failed": {
+            "passes": 0,
+            "fails": 31240,
+            "thresholds": {
+                "rate<0.05": false
+            },
+            "value": 0
+        },
+        "endpoint_passenger_account_status": {
+            "p(90)": 228.70554000000013,
+            "p(95)": 263.83876,
+            "avg": 135.28093063444115,
+            "min": 0.4337,
+            "med": 136.6426,
+            "max": 564.9933
+        },
+        "endpoint_passenger_auth_me": {
+            "avg": 134.83206429003047,
+            "min": 0.4423,
+            "med": 136.7882,
+            "max": 530.5109,
+            "p(90)": 226.79864000000006,
+            "p(95)": 267.0242
+        },
+        "http_req_blocked": {
+            "avg": 0.0275454129321383,
+            "min": 0,
+            "med": 0,
+            "max": 47.9998,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "endpoint_public_search_transfer": {
+            "p(95)": 478.29557,
+            "avg": 268.27573758308165,
+            "min": 2.4886,
+            "med": 282.5004,
+            "max": 975.0179,
+            "p(90)": 418.93774
+        },
+        "http_req_failed": {
+            "passes": 0,
+            "fails": 31240,
+            "thresholds": {
+                "rate<0.05": false
+            },
+            "value": 0
+        },
+        "endpoint_admin_knowledge": {
+            "max": 274.8745,
+            "p(90)": 143.5995,
+            "p(95)": 169.9696,
+            "avg": 105.50657212911234,
+            "min": 28.5011,
+            "med": 99.3208
+        },
+        "endpoint_passenger_profile": {
+            "avg": 136.16010960725075,
+            "min": 0.4971,
+            "med": 137.9818,
+            "max": 570.5148,
+            "p(90)": 228.99934,
+            "p(95)": 262.80124999999987
+        },
+        "endpoint_public_search_main": {
+            "min": 2.8918,
+            "med": 283.7181,
+            "max": 999.859,
+            "p(90)": 426.45222,
+            "p(95)": 496.30229999999995,
+            "avg": 272.89672851963724
+        },
+        "endpoint_driver_trips": {
+            "avg": 262.7782450755283,
+            "min": 0.9994,
+            "med": 281.4996,
+            "max": 1018.4801,
+            "p(90)": 415.49328,
+            "p(95)": 467.14995999999996
+        },
+        "endpoint_driver_dashboard": {
+            "min": 6.0005,
+            "med": 1900.991,
+            "max": 3572.7885,
+            "p(90)": 2472.00124,
+            "p(95)": 2821.2274,
+            "avg": 1698.9739577039277
+        },
+        "checks": {
+            "passes": 31240,
+            "fails": 0,
+            "value": 1
+        },
+        "endpoint_admin_users": {
+            "avg": 142.35000451219486,
+            "min": 2.4997,
+            "med": 144.9977,
+            "max": 489.5019,
+            "p(90)": 231.99967999999998,
+            "p(95)": 269.0003
+        },
+        "http_req_tls_handshaking": {
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0
+        },
+        "tripverse_req_duration": {
+            "p(95)": 2032.00364,
+            "avg": 518.9629382266329,
+            "min": 0.4261,
+            "med": 259.56045,
+            "max": 3572.7885,
+            "p(90)": 1646.5794100000007,
+            "thresholds": {
+                "p(95)<1000": true
+            }
+        },
+        "endpoint_passenger_orders_my": {
+            "p(90)": 796.5939400000002,
+            "p(95)": 889.6735299999995,
+            "avg": 524.6561314199407,
+            "min": 1.9972,
+            "med": 575.5002,
+            "max": 1678.9982
+        },
+        "endpoint_admin_orders": {
+            "min": 23.4988,
+            "med": 504.16825,
+            "max": 1437.422,
+            "p(90)": 695.46054,
+            "p(95)": 781.3959649999997,
+            "avg": 477.19796374845833
+        },
+        "http_req_waiting": {
+            "avg": 518.6308467989749,
+            "min": 0.4261,
+            "med": 259.40970000000004,
+            "max": 3572.7885,
+            "p(90)": 1646.5794100000007,
+            "p(95)": 2031.99914
+        },
+        "http_req_receiving": {
+            "p(90)": 0.5058100000000002,
+            "p(95)": 1.0013,
+            "avg": 0.29826506081946236,
+            "min": 0,
+            "med": 0,
+            "max": 83.6875
+        }
+    }
+}

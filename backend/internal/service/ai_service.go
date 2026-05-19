@@ -1303,9 +1303,9 @@ func parsePassengerReplyDirectlyArguments(text string) (*PassengerAIChatResult, 
 
 	if len(suggestions) == 0 {
 		suggestions = []string{
-			"甯垜鏌ユ槑澶╂澀宸炲埌鑻忓窞鐨勭エ",
-			"甯垜鐪嬩笅鎴戠殑璁㈠崟",
-			"鎴戣繖绗旇鍗曡兘閫€娆惧悧",
+			"帮我查明天杭州到苏州的票",
+			"帮我看下我的订单",
+			"我这笔订单能退款吗",
 		}
 	}
 
@@ -1352,9 +1352,9 @@ func parsePassengerAIChatResult(text string) (*PassengerAIChatResult, error) {
 
 	if len(suggestions) == 0 {
 		suggestions = []string{
-			"甯垜鏌ユ槑澶╂澀宸炲埌鑻忓窞鐨勭エ",
-			"甯垜鐪嬩笅鎴戠殑璁㈠崟",
-			"鎴戣繖绗旇鍗曡兘閫€娆惧悧",
+			"帮我查明天杭州到苏州的票",
+			"帮我看下我的订单",
+			"我这笔订单能退款吗",
 		}
 	}
 

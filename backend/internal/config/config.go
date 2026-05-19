@@ -44,7 +44,7 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		ServerAddress:         getEnv("SERVER_ADDR", ":8080"),
+		ServerAddress:         getEnv("SERVER_ADDR", ":8081"),
 		MySQLDSN:              getEnv("MYSQL_DSN", "root:hyh@tcp(127.0.0.1:3306)/ridehailing_demo?charset=utf8mb4&parseTime=True&loc=Local"),
 		RedisAddr:             getEnv("REDIS_ADDR", "127.0.0.1:6379"),
 		RedisPassword:         getEnv("REDIS_PASSWORD", ""),

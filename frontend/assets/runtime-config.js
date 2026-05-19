@@ -1,7 +1,7 @@
 window.__TRIPVERSE_RUNTIME__ = Object.assign(
   {
     appName: "TripVerse",
-    apiBaseUrl: "http://localhost:8080/api",
+    apiBaseUrl: "/api",
     timeout: 10000,
     useMock: false,
     debug: true,

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -9,40 +9,19 @@
 <body data-page="orders">
   <header class="site-header">
     <div class="container nav-shell">
-      <a class="brand" href="index.html"><span class="brand-mark">TV</span><span>TripVerse</span></a>
-      <nav class="nav-links"></nav>
-      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+      <a class="brand" href="index.html" aria-label="TripVerse 首页">
+        <span class="brand-mark">TV</span>
+        <span>TripVerse</span>
+      </a>
+      <nav class="nav-links" aria-label="主导航"></nav>
+      <button class="menu-button" type="button" data-nav-toggle aria-label="打开导航">菜单</button>
     </div>
     <div class="mobile-drawer">
       <div class="container mobile-links"></div>
     </div>
   </header>
-
-  <main class="page">
-    <div class="container">
-      <section class="page-hero">
-        <div class="row-between">
-          <div>
-            <span class="eyebrow">我的订单</span>
-            <h1 class="section-title">近期行程与订单状态</h1>
-          </div>
-          <div class="chip-row" data-order-summary style="display:none"></div>
-        </div>
-      </section>
-
-      <div class="list-stack" data-order-list>
-        <div class="info-card">
-          <strong>正在加载订单...</strong>
-          <p class="muted">正在从后端同步你的订单数据。</p>
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <footer class="footer">
-    <div class="container footer-card">订单页只展示真实后端数据；没有订单时会直接显示空状态。</div>
-  </footer>
-  <script src="assets/runtime-config.js?v=20260507-payment-expire"></script>
-  <script src="assets/app.js?v=20260507-payment-expire"></script>
+  <main class="page"><div class="container"><section class="page-hero"><div class="hero-copy"><span class="eyebrow">乘客端 / 订单</span><h1 class="section-title">我的订单</h1><p class="lede">订单列表支持加载、空状态、取消、退款和详情跳转。</p></div></section><section class="dashboard-grid"><article class="panel"><div class="chip-row" data-order-summary><span class="mini-chip">加载中</span></div><div class="list-stack section-block" data-order-list><div class="info-card">正在加载订单</div></div></article><aside class="panel"><h2 class="subhead">售后说明</h2><p class="muted">订单状态会随支付、退款审核和司机核验同步更新。</p></aside></section></div></main>
+  <script src="assets/runtime-config.js?v=20260519-blue-ui"></script>
+  <script src="assets/app.js?v=20260519-blue-ui"></script>
 </body>
 </html>

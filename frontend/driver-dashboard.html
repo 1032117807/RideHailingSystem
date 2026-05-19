@@ -1,100 +1,27 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>司机首页 - TripVerse</title>
+  <title>司机工作台 - TripVerse</title>
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body data-page="driver">
   <header class="site-header">
     <div class="container nav-shell">
-      <a class="brand" href="index.html"><span class="brand-mark">TV</span><span>TripVerse</span></a>
-      <nav class="nav-links"></nav>
-      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+      <a class="brand" href="index.html" aria-label="TripVerse 首页">
+        <span class="brand-mark">TV</span>
+        <span>TripVerse</span>
+      </a>
+      <nav class="nav-links" aria-label="主导航"></nav>
+      <button class="menu-button" type="button" data-nav-toggle aria-label="打开导航">菜单</button>
     </div>
     <div class="mobile-drawer">
       <div class="container mobile-links"></div>
     </div>
   </header>
-
-  <main class="page">
-    <div class="container">
-      <div class="tab-strip">
-        <a class="is-active" href="driver-dashboard.html">司机首页</a>
-        <a href="driver-publish.html">发布班次</a>
-        <a href="driver-trips.html">班次管理</a>
-        <a href="driver-trip-detail.html">班次详情</a>
-        <a href="driver-income.html">收益页</a>
-        <a href="driver-ai.html">AI 辅助</a>
-      </div>
-
-      <section class="page-hero">
-        <div class="row-between">
-          <div>
-            <span class="eyebrow">司机端 / 工作台</span>
-            <h1 class="section-title">今日班次、订单与收益概览</h1>
-            <p class="muted">页面已接入后端真实数据，展示今日发班、售票、待核销和未来 4 小时行程信息。</p>
-          </div>
-          <a class="button button-primary" href="driver-publish.html">发布新班次</a>
-        </div>
-      </section>
-
-      <section class="stat-grid">
-        <article class="stat-card">
-          <div class="stat-label">今日班次</div>
-          <div class="stat-value" data-driver-dashboard-today-trips>--</div>
-          <div class="stat-delta">已完成 <span data-driver-dashboard-completed-trips>--</span> 班</div>
-        </article>
-        <article class="stat-card">
-          <div class="stat-label">已售票数</div>
-          <div class="stat-value" data-driver-dashboard-sold-tickets>--</div>
-          <div class="stat-delta">上座率 <span data-driver-dashboard-seat-rate>--</span></div>
-        </article>
-        <article class="stat-card">
-          <div class="stat-label">今日收入</div>
-          <div class="stat-value" data-driver-dashboard-today-income>--</div>
-          <div class="stat-delta">待核销 <span data-driver-dashboard-pending-verify>--</span></div>
-        </article>
-        <article class="stat-card">
-          <div class="stat-label">退款申请</div>
-          <div class="stat-value" data-driver-dashboard-refund-count>--</div>
-          <div class="stat-delta">请及时关注售后订单</div>
-        </article>
-      </section>
-
-      <section class="dashboard-grid section-block">
-        <article class="panel">
-          <div class="row-between">
-            <h2 class="subhead">接下来 4 小时班次</h2>
-            <a class="button button-secondary" href="driver-trips.html">查看全部</a>
-          </div>
-          <div class="list-stack section-block" data-driver-dashboard-upcoming-list>
-            <div class="info-card">
-              <strong>正在加载</strong>
-              <p class="muted">正在从后端读取未来 4 小时班次。</p>
-            </div>
-          </div>
-        </article>
-
-        <aside class="panel">
-          <h2 class="subhead">待办提醒</h2>
-          <div class="list-stack section-block" data-driver-dashboard-alert-list>
-            <div class="info-card">
-              <strong>正在加载</strong>
-              <p class="muted">正在汇总待核销与退款提醒。</p>
-            </div>
-          </div>
-        </aside>
-      </section>
-    </div>
-  </main>
-
-  <footer class="footer">
-    <div class="container footer-card">司机首页现在展示后端真实统计，可直接查看今日运营状态、待办和即将发车班次。</div>
-  </footer>
-
-  <script src="assets/runtime-config.js?v=20260507-driver-dashboard"></script>
-  <script src="assets/app.js?v=20260507-driver-dashboard"></script>
+  <main class="page"><div class="container"><section class="page-hero"><div class="hero-copy"><span class="eyebrow">司机端</span><h1 class="section-title">运营工作台</h1><p class="lede">今日车次、核验、退款提醒和待发班次集中展示。</p></div></section><section class="stat-grid"><div class="stat-card"><div class="stat-label">今日班次</div><div class="stat-value" data-driver-dashboard-today-trips>--</div></div><div class="stat-card"><div class="stat-label">已完成</div><div class="stat-value" data-driver-dashboard-completed-trips>--</div></div><div class="stat-card"><div class="stat-label">已售票</div><div class="stat-value" data-driver-dashboard-sold-tickets>--</div></div><div class="stat-card"><div class="stat-label">上座率</div><div class="stat-value" data-driver-dashboard-seat-rate>--</div></div></section><section class="dashboard-grid section-block"><article class="panel"><h2 class="subhead">待发班次</h2><div class="list-stack section-block" data-driver-dashboard-upcoming-list></div></article><aside class="panel"><div class="pricing-box"><div class="pricing-row"><span>今日收入</span><strong data-driver-dashboard-today-income>--</strong></div><div class="pricing-row"><span>待核验</span><strong data-driver-dashboard-pending-verify>--</strong></div><div class="pricing-row"><span>退款数</span><strong data-driver-dashboard-refund-count>--</strong></div></div><div class="list-stack section-block" data-driver-dashboard-alert-list></div></aside></section></div></main>
+  <script src="assets/runtime-config.js?v=20260519-blue-ui"></script>
+  <script src="assets/app.js?v=20260519-blue-ui"></script>
 </body>
 </html>

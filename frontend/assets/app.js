@@ -63,7 +63,6 @@
     user: Object.freeze({
       profile: "/users/profile",
       verifyRealName: "/users/verify-real-name",
-      switchRole: "/users/switch-role",
       accountStatus: "/users/account/status",
     }),
     passenger: Object.freeze({
@@ -73,6 +72,7 @@
       createOrder: "/orders",
       myOrders: "/orders/my",
       orderDetail: "/orders/:orderId",
+      orderTicket: "/orders/:orderId/ticket",
       cancelOrder: "/orders/:orderId/cancel",
       refundOrder: "/orders/:orderId/refund",
       rescheduleOrder: "/orders/:orderId/reschedule",
@@ -87,6 +87,7 @@
       tripDetail: "/driver/trips/:tripId",
       closeTrip: "/driver/trips/:tripId/close",
       income: "/driver/income",
+      verifyTicket: "/driver/tickets/verify",
       aiCreateTrip: "/ai/driver/create-trip",
     }),
     admin: Object.freeze({
@@ -367,6 +368,42 @@
     return new URLSearchParams(window.location.search).get(key) || "";
   }
 
+  function buildTicketDetailHref(ticketId) {
+    return `${ROUTES.passenger.tripDetail}?ticketId=${encodeURIComponent(ticketId || "")}`;
+  }
+
+  function buildCheckoutHref(ticketId) {
+    return `${ROUTES.passenger.checkout}?ticketId=${encodeURIComponent(ticketId || "")}`;
+  }
+
+  function buildOrderDetailHref(orderId) {
+    return `${ROUTES.passenger.orderDetail}?orderId=${encodeURIComponent(orderId || "")}`;
+  }
+
+  function renderStationLinks(stops, ticketId, hrefOverride, title) {
+    const names = (Array.isArray(stops) ? stops : [])
+      .map((stop) => {
+        if (typeof stop === "string") {
+          return stop;
+        }
+        return stop?.stopName || stop?.name || "";
+      })
+      .map((name) => String(name || "").trim())
+      .filter(Boolean);
+
+    if (!names.length || (!ticketId && !hrefOverride)) {
+      return "";
+    }
+
+    const href = hrefOverride || buildCheckoutHref(ticketId);
+    const linkTitle = title || "进入该班次下单";
+    return `
+      <div class="station-link-row">
+        ${names.map((name) => `<a class="tag station-link" href="${href}" title="${escapeHtml(linkTitle)}">${escapeHtml(name)}</a>`).join("")}
+      </div>
+    `;
+  }
+
   function saveLastTicketId(ticketId) {
     if (!ticketId) {
       return;
@@ -442,23 +479,23 @@
   function formatMoneyFromCent(value) {
     const amount = Number(value || 0) / 100;
     if (Number.isInteger(amount)) {
-      return `楼${amount}`;
+      return `¥${amount}`;
     }
-    return `楼${amount.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")}`;
+    return `¥${amount.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")}`;
   }
 
   function formatPriceCent(value) {
-    return `楼${Number(value || 0)}`;
+    return formatMoneyFromCent(value);
   }
 
   function mapTripStatus(status) {
     switch (status) {
       case "published":
-        return "鍞エ涓?";
+        return "售票中";
       case "closed":
-        return "宸插叧闂?";
+        return "已关闭";
       case "draft":
-        return "鑽夌";
+        return "草稿";
       default:
         return status || "--";
     }
@@ -482,17 +519,20 @@
 
   function mapRefundStatus(refundStatus) {
     if (refundStatus === "requested") {
-      return "閫€娆剧敵璇蜂腑";
+      return "退款申请中";
     }
     if (refundStatus === "refunded") {
       return "已退款";
+    }
+    if (refundStatus === "rejected") {
+      return "退款已驳回";
     }
     return "无退款";
   }
 
   function mapSeatType(seatType) {
     if (seatType === "standard") {
-      return "鏍囧噯搴?";
+      return "标准座";
     }
     return seatType || "--";
   }
@@ -557,7 +597,7 @@
       return false;
     }
 
-    if (DRIVER_ONLY_PAGES.has(currentFile) && !["driver", "admin"].includes(auth.role)) {
+    if (DRIVER_ONLY_PAGES.has(currentFile) && auth.role !== "driver") {
       redirectTo(getRoleHome(auth.role));
       return false;
     }
@@ -710,7 +750,7 @@
       const serviceFee = Number(feeNode?.dataset.fee || 0);
       const total = quantity * Math.round(basePrice * multiplier) + serviceFee;
 
-      totalOutput.textContent = `楼${total}`;
+      totalOutput.textContent = formatPriceCent(total);
     }
 
     [quantityInput, seatTypeInput].forEach((node) => {
@@ -747,13 +787,13 @@
 
       const userMessage = document.createElement("div");
       userMessage.className = "message user";
-      userMessage.innerHTML = `<strong>浣?/strong><div>${value}</div>`;
+      userMessage.innerHTML = `<strong>你</strong><div>${escapeHtml(value)}</div>`;
       aiChat.appendChild(userMessage);
 
       const aiMessage = document.createElement("div");
       aiMessage.className = "message ai";
       aiMessage.innerHTML =
-        "<strong>AI 鍔╂墜</strong><div>鎴戝凡鏍规嵁浣犵殑鏉′欢鐢熸垚寤鸿锛氫紭鍏堟帹鑽愭棭鐝珮閾侊紝鍏舵鏄綆浠峰ぇ宸达紝骞跺凡鎻愰啋浣犳敞鎰忔崲涔樻椂闂村拰閫€鏀硅鍒欍€?/div>";
+        "<strong>AI 助手</strong><div>我已根据你的条件生成建议：优先推荐早班高铁，其次是低价大巴，并已提醒你注意换乘时间和退改规则。</div>";
       aiChat.appendChild(aiMessage);
 
       aiInput.value = "";
@@ -892,57 +932,7 @@
   }
 
   function renderProfileAccountModule() {
-    if (document.body.dataset.page !== "profile") {
-      return;
-    }
-
-    const auth = readAuth();
-    if (!auth) {
-      return;
-    }
-
-    const container = document.querySelector(".page .container");
-    if (!container) {
-      return;
-    }
-
-    const card = document.createElement("section");
-    card.className = "panel profile-auth-card";
-    card.innerHTML = `
-      <div class="row-between">
-        <div>
-          <span class="eyebrow">璐︽埛鐘舵€?/span>
-          <h2 class="subhead">褰撳墠鐧诲綍韬唤锛?{ROLE_LABELS[auth.role] || auth.role}</h2>
-          <p class="muted">鎵嬫満鍙凤細${auth.phone || "-"}锛岃处鎴风姸鎬侊細${auth.status === "active" ? "姝ｅ父" : "鍙楅檺"}</p>
-        </div>
-        <div class="button-row">
-          ${auth.role === "passenger" ? '<button class="button button-secondary" type="button" data-switch-role="driver">鍒囨崲涓哄徃鏈?/button>' : ""}
-          ${auth.role === "driver" ? '<button class="button button-secondary" type="button" data-switch-role="passenger">切换为乘客</button>' : ""}
-          <button class="button button-ghost" type="button" data-logout>閫€鍑虹櫥褰?/button>
-        </div>
-      </div>
-    `;
-
-    const hero = container.querySelector(".page-hero");
-    if (hero) {
-      hero.insertAdjacentElement("afterend", card);
-    } else {
-      container.prepend(card);
-    }
-
-    card.querySelectorAll("[data-switch-role]").forEach((button) => {
-      button.addEventListener("click", async () => {
-        const targetRole = button.dataset.switchRole;
-        await api.post(API_ENDPOINTS.user.switchRole, { targetRole });
-        saveAuth({
-          ...auth,
-          role: targetRole,
-          nickname: targetRole === "driver" ? "李师傅" : "张明",
-        });
-        showToast(`宸插垏鎹负${ROLE_LABELS[targetRole]}`);
-        window.setTimeout(() => redirectTo(getRoleHome(targetRole)), 300);
-      });
-    });
+    return;
   }
 
   function initAuthForms() {
@@ -1555,6 +1545,27 @@
         }
 
         resultsBox.innerHTML = trips.map((trip) => {
+          if (trip.kind === "suggestion") {
+            const suggestions = Array.isArray(trip.suggestions) ? trip.suggestions : [];
+            return `
+              <div class="ticket-card">
+                <div>
+                  <strong>可尝试的中转方向</strong>
+                  <p class="muted">当天没有精确可购的直达或中转组合，可以从这些中转城市重新搜索。</p>
+                  <div class="list-stack section-block">
+                    ${suggestions.length ? suggestions.map((suggestion, index) => `
+                      <div class="info-card">
+                        <strong>方案 ${index + 1}：${escapeHtml(suggestion.route || "--")}</strong>
+                        <p class="muted">${escapeHtml(suggestion.reason || "")}</p>
+                        <p class="muted">中转城市：${escapeHtml(suggestion.transferCity || "--")}，前段 ${Number(suggestion.firstLegCount || 0)} 班，后段 ${Number(suggestion.secondLegCount || 0)} 班</p>
+                      </div>
+                    `).join("") : `<div class="info-card"><p class="muted">暂无候选路线。</p></div>`}
+                  </div>
+                </div>
+              </div>
+            `;
+          }
+
           const legs = Array.isArray(trip.legs) ? trip.legs : [];
           const transferBlock = trip.kind === "transfer" && legs.length
             ? `
@@ -1564,6 +1575,10 @@
                     <strong>第 ${index + 1} 段：${escapeHtml(leg.startCity || "")} -> ${escapeHtml(leg.endCity || "")}</strong>
                     <p class="muted">${escapeHtml(formatShortDateTime(leg.departureTime))} - ${escapeHtml(formatShortDateTime(leg.arrivalTime))}</p>
                     <p class="muted">${escapeHtml(leg.vehicleType || "--")}，票价 ${escapeHtml(formatPriceCent(leg.priceCent || 0))}，余票 ${Number(leg.seatAvailable || 0)}</p>
+                    <div class="button-row section-block">
+                      <a class="button button-secondary" href="${buildTicketDetailHref(leg.tripId)}">查看第 ${index + 1} 段</a>
+                      <a class="button button-primary" href="${buildCheckoutHref(leg.tripId)}">购买第 ${index + 1} 段</a>
+                    </div>
                   </div>
                 `).join("")}
                 <div class="info-card">
@@ -1576,9 +1591,14 @@
 
           const actionButtons = trip.kind === "transfer" && legs.length
             ? legs.map((leg, index) => `
-                <a class="button button-secondary" href="${ROUTES.passenger.tripDetail}?ticketId=${leg.tripId}">查看第 ${index + 1} 段</a>
+                <a class="button button-secondary" href="${buildTicketDetailHref(leg.tripId)}">查看第 ${index + 1} 段</a>
+                <a class="button button-primary" href="${buildCheckoutHref(leg.tripId)}">购买第 ${index + 1} 段</a>
               `).join("")
-            : `<a class="button button-secondary" href="${ROUTES.passenger.tripDetail}?ticketId=${trip.id}">查看详情</a>`;
+            : `
+                <a class="button button-secondary" href="${buildTicketDetailHref(trip.id)}">查看详情</a>
+                <a class="button button-primary" href="${buildCheckoutHref(trip.id)}">去下单</a>
+              `;
+          const stationLinks = trip.kind !== "transfer" ? renderStationLinks(trip.stops, trip.id) : "";
 
           return `
             <div class="ticket-card">
@@ -1595,6 +1615,7 @@
                     <span>余票 ${trip.seatAvailable || 0}</span>
                     <span>${escapeHtml(mapTripStatus(trip.status))}</span>
                   </div>
+                  ${stationLinks}
                   ${transferBlock}
                 </div>
                 <div class="price-pill">${escapeHtml(formatPriceCent(trip.priceCent))}</div>
@@ -1704,7 +1725,7 @@
         if (tagsBox) {
           tagsBox.innerHTML = `
             <span class="tag">${escapeHtml(formatPriceCent(trip.priceCent))}</span>
-            <span class="tag">浣欑エ ${trip.seatAvailable || 0}</span>
+            <span class="tag">余票 ${trip.seatAvailable || 0}</span>
             <span class="tag">${escapeHtml(mapTripStatus(trip.status))}</span>
           `;
         }
@@ -1715,19 +1736,19 @@
             ? stops.map((stop) => `
                 <div class="timeline-item">
                   <span class="timeline-dot"></span>
-                  <strong>${escapeHtml(stop.stopName)}</strong>
+                  <strong><a class="station-text-link" href="${buildCheckoutHref(ticketId)}">${escapeHtml(stop.stopName)}</a></strong>
                   <p class="muted">${escapeHtml(formatFullDateTime(stop.planArrivalTime || stop.planDepartureTime || trip.departureTime))}</p>
                 </div>
               `).join("")
             : `
                 <div class="timeline-item">
                   <span class="timeline-dot"></span>
-                  <strong>${escapeHtml(trip.startCity)}</strong>
+                  <strong><a class="station-text-link" href="${buildCheckoutHref(ticketId)}">${escapeHtml(trip.startCity)}</a></strong>
                   <p class="muted">${escapeHtml(formatFullDateTime(trip.departureTime))}</p>
                 </div>
                 <div class="timeline-item">
                   <span class="timeline-dot"></span>
-                  <strong>${escapeHtml(trip.endCity)}</strong>
+                  <strong><a class="station-text-link" href="${buildCheckoutHref(ticketId)}">${escapeHtml(trip.endCity)}</a></strong>
                   <p class="muted">${escapeHtml(formatFullDateTime(trip.arrivalTime))}</p>
                 </div>
               `;
@@ -2427,7 +2448,6 @@
     const nicknameInput = document.querySelector("[name='nickname']");
     const phoneInput = document.querySelector("[name='phone']");
     let emailInput = document.querySelector("[name='email']");
-    const defaultRoleSelect = document.querySelector("[name='defaultRole']");
     const verifiedInput = document.querySelector("[name='realNameVerified']");
 
     if (!emailInput) {
@@ -2442,13 +2462,6 @@
         notificationField.insertAdjacentElement("beforebegin", emailField);
         emailInput = emailField.querySelector("[name='email']");
       }
-    }
-
-    if (defaultRoleSelect) {
-      defaultRoleSelect.innerHTML = `
-        <option value="passenger">涔樺</option>
-        <option value="driver">鍙告満</option>
-      `;
     }
 
     Promise.all([
@@ -2466,7 +2479,6 @@
         }
         emailInput.value = user.email || "";
       }
-      if (defaultRoleSelect) defaultRoleSelect.value = status.defaultRole || user.defaultRole || user.role || "passenger";
       if (verifiedInput) verifiedInput.value = status.realNameVerified ? "已实名" : "未实名";
 
       const auth = readAuth();
@@ -2490,7 +2502,6 @@
           const result = await api.put(API_ENDPOINTS.user.profile, {
             nickname: nicknameInput?.value || "",
             email: emailInput?.value || "",
-            defaultRole: defaultRoleSelect?.value || "",
           });
 
           const user = result?.data || {};
@@ -2820,8 +2831,8 @@
       if (seatInfoBox) {
         const sold = Math.max((trip.seatTotal || 0) - (trip.seatAvailable || 0), 0);
         seatInfoBox.innerHTML = `
-          <span>楼${Number(trip.priceCent || 0)}</span>
-          <span>${trip.seatTotal || 0} 搴?/ 宸插敭 ${sold}</span>
+          <span>${escapeHtml(formatPriceCent(trip.priceCent))}</span>
+          <span>${trip.seatTotal || 0} 座 / 已售 ${sold}</span>
         `;
       }
     };
@@ -2869,9 +2880,9 @@
             </div>
             <div class="list-meta">
               <span>${escapeHtml(formatFullDateTime(order.createdAt))}</span>
-              <span>${order.ticketCount || 0} 寮?/span>
+              <span>${order.ticketCount || 0} 张</span>
               <span>${escapeHtml(mapSeatType(order.seatType))}</span>
-              <span>楼${Number(order.amount || 0)}</span>
+              <span>${escapeHtml(formatMoneyFromCent(order.amount || 0))}</span>
             </div>
             <div class="list-meta">
               <span>鏀粯鐘舵€侊細${escapeHtml(order.payStatus || "--")}</span>
@@ -3006,14 +3017,14 @@
 
         if (tagsBox) {
           tagsBox.innerHTML = `
-            <span class="tag">楼${Number(trip.priceCent || 0)}</span>
-            <span class="tag">浣欑エ ${trip.seatAvailable || 0}</span>
+            <span class="tag">${escapeHtml(formatPriceCent(trip.priceCent))}</span>
+            <span class="tag">余票 ${trip.seatAvailable || 0}</span>
             <span class="tag">${escapeHtml(mapTripStatus(trip.status))}</span>
           `;
         }
 
         if (priceBox) {
-          priceBox.textContent = `楼${Number(trip.priceCent || 0)}`;
+          priceBox.textContent = formatPriceCent(trip.priceCent);
         }
 
         if (seatBox) {
@@ -3030,19 +3041,19 @@
             ? stops.map((stop) => `
                 <div class="timeline-item">
                   <span class="timeline-dot"></span>
-                  <strong>${escapeHtml(stop.stopName)}</strong>
+                  <strong><a class="station-text-link" href="${buildCheckoutHref(ticketId)}">${escapeHtml(stop.stopName)}</a></strong>
                   <p class="muted">${escapeHtml(formatFullDateTime(stop.planArrivalTime || stop.planDepartureTime || trip.departureTime))}</p>
                 </div>
               `).join("")
             : `
                 <div class="timeline-item">
                   <span class="timeline-dot"></span>
-                  <strong>${escapeHtml(trip.startCity)}</strong>
+                  <strong><a class="station-text-link" href="${buildCheckoutHref(ticketId)}">${escapeHtml(trip.startCity)}</a></strong>
                   <p class="muted">${escapeHtml(formatFullDateTime(trip.departureTime))}</p>
                 </div>
                 <div class="timeline-item">
                   <span class="timeline-dot"></span>
-                  <strong>${escapeHtml(trip.endCity)}</strong>
+                  <strong><a class="station-text-link" href="${buildCheckoutHref(ticketId)}">${escapeHtml(trip.endCity)}</a></strong>
                   <p class="muted">${escapeHtml(formatFullDateTime(trip.arrivalTime))}</p>
                 </div>
               `;
@@ -3079,7 +3090,7 @@
     const totalOutput = document.querySelector("[data-total-output]");
 
     function formatCheckoutAmount(cent) {
-      return `楼${Number(cent || 0)}`;
+      return formatPriceCent(cent);
     }
 
     function renderMissingTicketState() {
@@ -3099,7 +3110,7 @@
         seatBox.textContent = "--";
       }
       if (totalOutput) {
-        totalOutput.textContent = "楼0";
+        totalOutput.textContent = formatPriceCent(0);
       }
       if (tripLink) {
         tripLink.href = ROUTES.passenger.search;
@@ -3272,15 +3283,15 @@
 
   function mapRefundStatus(refundStatus) {
     if (refundStatus === "requested") {
-      return "閫€娆剧敵璇蜂腑";
+      return "退款申请中";
     }
     if (refundStatus === "refunded") {
-      return "宸查€€娆?";
+      return "已退款";
     }
     if (refundStatus === "rejected") {
-      return "宸查┏鍥?";
+      return "退款已驳回";
     }
-    return "鏃犻€€娆?";
+    return "无退款";
   }
 
   function mapUserStatus(status) {
@@ -3432,7 +3443,7 @@
                 <div class="list-meta">
                   <span>${escapeHtml(mapOrderStatus(order.orderStatus, order.payStatus))}</span>
                   <span>${escapeHtml(mapRefundStatus(order.refundStatus))}</span>
-                  <span>楼${Number(order.amount || 0)}</span>
+                  <span>${escapeHtml(formatMoneyFromCent(order.amount || 0))}</span>
                   <span>${escapeHtml(formatFullDateTime(order.createdAt))}</span>
                 </div>
                 ${reviewNote}
@@ -4061,8 +4072,17 @@
           const trip = order?.trip || null;
           const route = trip ? `${trip.startCity} -> ${trip.endCity}` : "";
           const departureTime = trip?.departureTime ? formatFullDateTime(trip.departureTime) : "";
+          const orderDetailHref = buildOrderDetailHref(order?.id);
           const expireMeta = getOrderPaymentExpireMeta(order);
           const statusText = getDisplayedOrderStatus(order);
+          const routeStations = trip
+            ? [
+                trip.startCity,
+                ...(Array.isArray(trip.stops) ? trip.stops : []).map((stop) => stop?.stopName || stop?.name || ""),
+                trip.endCity,
+              ]
+            : [];
+          const orderStations = renderStationLinks(routeStations, "", orderDetailHref, "进入该订单详情");
           const refundTag = order?.refundStatus && order.refundStatus !== "none"
             ? `<span class="tag">${escapeHtml(mapRefundStatus(order.refundStatus))}</span>`
             : "";
@@ -4082,11 +4102,11 @@
           const canContinuePay = (order?.orderStatus === "pending_payment" || order?.payStatus === "unpaid") && !expireMeta.expired;
           const primaryAction = canContinuePay
             ? `<a class="button button-primary" href="${ROUTES.passenger.payment}?orderId=${order.id}">去支付</a>`
-            : `<a class="button button-primary" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">鏌ョ湅璇︽儏</a>`;
+            : `<a class="button button-primary" href="${orderDetailHref}">查看详情</a>`;
 
           const secondaryAction = canContinuePay
-            ? `<a class="button button-secondary" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">璁㈠崟璇︽儏</a>`
-            : `<a class="button button-ghost" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">鏌ョ湅璁㈠崟</a>`;
+            ? `<a class="button button-secondary" href="${orderDetailHref}">订单详情</a>`
+            : `<a class="button button-ghost" href="${orderDetailHref}">查看订单</a>`;
 
           return `
             <div class="order-card">
@@ -4100,6 +4120,7 @@
                     ${expireTag}
                   </div>
                   ${expireNote}
+                  ${orderStations ? `<div class="muted">经停站点可点入对应订单：</div>${orderStations}` : ""}
                   ${reviewNote}
                   ${reviewedAt}
                 </div>
@@ -4242,7 +4263,7 @@
 
           const primaryAction = canContinuePay
             ? `<a class="button button-primary" href="${ROUTES.passenger.payment}?orderId=${order.id}">缁х画鏀粯</a>`
-            : `<button class="button button-primary" type="button" data-toast="${expiredPendingPayment ? "订单支付已超时，系统会自动取消并释放座位" : "电子票功能已预留，后续可继续接二维码接口"}">${expiredPendingPayment ? "支付已超时" : "查看电子票"}</button>`;
+            : `<button class="button button-primary" type="button" ${expiredPendingPayment ? "disabled" : "data-electronic-ticket"}>${expiredPendingPayment ? "支付已超时" : "查看电子票"}</button>`;
 
           const cancelAction = canCancel
             ? `<button class="button button-ghost" type="button" data-order-cancel>鍙栨秷璁㈠崟</button>`
@@ -4266,10 +4287,37 @@
             ${cancelAction}
             ${refundAction}
             <a class="button button-secondary" href="${ROUTES.passenger.orders}">杩斿洖璁㈠崟鍒楄〃</a>
+            <div class="info-card" data-electronic-ticket-box style="display:none"></div>
             ${expireInfo}
             ${reviewInfo}
           `;
           initToastTriggers();
+
+          const ticketButton = actionsBox.querySelector("[data-electronic-ticket]");
+          const ticketBox = actionsBox.querySelector("[data-electronic-ticket-box]");
+          if (ticketButton && ticketBox) {
+            ticketButton.addEventListener("click", async () => {
+              try {
+                ticketButton.disabled = true;
+                ticketButton.textContent = "出票中...";
+                const result = await api.get(API_ENDPOINTS.passenger.orderTicket, undefined, { pathParams: { orderId } });
+                const ticket = result?.data || {};
+                ticketBox.style.display = "";
+                ticketBox.innerHTML = `
+                  <strong>电子票 token</strong>
+                  <p class="muted">司机端可复制该 token 到核验框完成验票。后续可接入 qrcode 组件渲染为二维码。</p>
+                  <textarea class="ticket-token-box" readonly>${escapeHtml(ticket.token || "")}</textarea>
+                  <div class="list-meta"><span>状态：${escapeHtml(ticket.status || "--")}</span><span>有效期：${escapeHtml(formatFullDateTime(ticket.expiresAt))}</span></div>
+                `;
+                ticketButton.textContent = "刷新电子票";
+              } catch (error) {
+                showToast(error.message || "电子票加载失败");
+                ticketButton.textContent = "查看电子票";
+              } finally {
+                ticketButton.disabled = false;
+              }
+            });
+          }
 
           const cancelButton = actionsBox.querySelector("[data-order-cancel]");
           if (cancelButton) {
@@ -5635,9 +5683,42 @@
       return;
     }
 
+    const auth = readAuth() || {};
+    const aiHistoryKey = `tripverse_passenger_ai_history_${auth.id || auth.userId || auth.phone || "guest"}`;
+    const aiDraftKey = `${aiHistoryKey}_draft`;
     const conversation = [];
+    const displayHistory = [];
 
-    const appendMessage = (role, title, content, trustedHtml = false) => {
+    const readAiHistory = () => {
+      try {
+        const raw = window.localStorage.getItem(aiHistoryKey);
+        const parsed = raw ? JSON.parse(raw) : null;
+        return Array.isArray(parsed?.messages) ? parsed.messages : [];
+      } catch (_) {
+        return [];
+      }
+    };
+
+    const saveAiHistory = () => {
+      try {
+        window.localStorage.setItem(aiHistoryKey, JSON.stringify({
+          messages: displayHistory.slice(-20),
+          savedAt: new Date().toISOString(),
+        }));
+      } catch (_) {
+        // Ignore storage failures.
+      }
+    };
+
+    const saveAiDraft = () => {
+      try {
+        window.localStorage.setItem(aiDraftKey, aiInput.value || "");
+      } catch (_) {
+        // Ignore storage failures.
+      }
+    };
+
+    const appendMessage = (role, title, content, trustedHtml = false, persist = true) => {
       const node = document.createElement("div");
       node.className = `message ${role}`;
       node.innerHTML = trustedHtml
@@ -5645,6 +5726,42 @@
         : `<strong>${title}</strong><div>${escapeHtml(content)}</div>`;
       aiChat.appendChild(node);
       aiChat.scrollTop = aiChat.scrollHeight;
+
+      if (persist) {
+        displayHistory.push({ role, title, content, trustedHtml: Boolean(trustedHtml) });
+        saveAiHistory();
+      }
+    };
+
+    const restoreAiState = () => {
+      const savedMessages = readAiHistory();
+      savedMessages.forEach((item) => {
+        if (!item || !item.role || !item.title) {
+          return;
+        }
+        displayHistory.push({
+          role: item.role,
+          title: item.title,
+          content: item.content || "",
+          trustedHtml: Boolean(item.trustedHtml),
+        });
+        appendMessage(item.role, item.title, item.content || "", Boolean(item.trustedHtml), false);
+
+        if (item.role === "user") {
+          conversation.push({ role: "user", content: String(item.content || "") });
+        } else if (item.role === "ai") {
+          const plainText = String(item.content || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+          if (plainText) {
+            conversation.push({ role: "assistant", content: plainText });
+          }
+        }
+      });
+
+      try {
+        aiInput.value = window.localStorage.getItem(aiDraftKey) || "";
+      } catch (_) {
+        // Ignore storage failures.
+      }
     };
 
     aiForm.addEventListener("submit", async (event) => {
@@ -5734,15 +5851,24 @@
                     <strong>第 ${index + 1} 段：${escapeHtml(leg.route || "--")}</strong>
                     <p class="muted">${escapeHtml(leg.departureTime || "--")} - ${escapeHtml(leg.arrivalTime || "--")}</p>
                     <p class="muted">${escapeHtml(leg.vehicleType || "--")}，票价 ${escapeHtml(formatMoneyFromCent(leg.priceCent || 0))}，余座 ${Number(leg.seatAvailable || 0)}</p>
+                    <div class="button-row section-block">
+                      <a class="button button-secondary" href="${buildTicketDetailHref(leg.tripId)}">查看第 ${index + 1} 段</a>
+                      <a class="button button-primary" href="${buildCheckoutHref(leg.tripId)}">购买第 ${index + 1} 段</a>
+                    </div>
                   </div>
                 `).join("")}
               </div>`
             : "";
           const actions = item.kind === "transfer" && legs.length
             ? legs.map((leg, index) => `
-                <a class="button button-secondary" href="${ROUTES.passenger.tripDetail}?ticketId=${encodeURIComponent(leg.tripId || "")}">查看第 ${index + 1} 段</a>
+                <a class="button button-secondary" href="${buildTicketDetailHref(leg.tripId)}">查看第 ${index + 1} 段</a>
+                <a class="button button-primary" href="${buildCheckoutHref(leg.tripId)}">购买第 ${index + 1} 段</a>
               `).join("")
-            : `<a class="button button-secondary" href="${ROUTES.passenger.tripDetail}?ticketId=${encodeURIComponent(item.id || "")}">查看详情</a>`;
+            : `
+                <a class="button button-secondary" href="${buildTicketDetailHref(item.id)}">查看详情</a>
+                <a class="button button-primary" href="${buildCheckoutHref(item.id)}">去下单</a>
+              `;
+          const stationLinks = item.kind !== "transfer" ? renderStationLinks(item.stops, item.id) : "";
 
           return `
             <div class="info-card">
@@ -5750,6 +5876,7 @@
               <p class="muted">${escapeHtml(item.departureTime || "--")} - ${escapeHtml(item.arrivalTime || "--")}</p>
               <p class="muted">余座 ${Number(item.seatAvailable || 0)}，票价 ${escapeHtml(formatMoneyFromCent(item.priceCent || 0))}</p>
               <p class="muted">${escapeHtml(item.vehicleType || "--")}</p>
+              ${stationLinks}
               ${transferMeta}
               ${legsHtml}
               <div class="button-row section-block">
@@ -5776,9 +5903,13 @@
 
     return `
       <div class="info-card">
-        <strong>璁㈠崟鎽樿</strong>
+        <strong>订单摘要</strong>
         <p class="muted">
-          鎬昏鍗?${Number(summary.totalCount || 0)}锛?          寰呮敮浠?${Number(summary.pendingPaymentCount || 0)}锛?          寰呮牳閿€ ${Number(summary.pendingVerificationCount || 0)}锛?          宸插畬鎴?${Number(summary.completedCount || 0)}锛?          閫€娆剧敵璇?${Number(summary.refundRequestedCount || 0)}
+          总订单 ${Number(summary.totalCount || 0)}，
+          待支付 ${Number(summary.pendingPaymentCount || 0)}，
+          待核销 ${Number(summary.pendingVerificationCount || 0)}，
+          已完成 ${Number(summary.completedCount || 0)}，
+          退款申请 ${Number(summary.refundRequestedCount || 0)}
         </p>
       </div>
     `;
@@ -5794,13 +5925,13 @@
       <div class="section-block">
         ${orders.slice(0, 4).map((item) => `
           <div class="info-card">
-            <strong>${escapeHtml(item.orderNo || `璁㈠崟 #${item.id || "--"}`)}</strong>
+            <strong>${escapeHtml(item.orderNo || `订单 #${item.id || "--"}`)}</strong>
             <p class="muted">${escapeHtml(item.route || "--")} ${escapeHtml(item.departureTime || "")}</p>
-            <p class="muted">璁㈠崟鐘舵€?${escapeHtml(item.orderStatus || "--")}锛屾敮浠樼姸鎬?${escapeHtml(item.payStatus || "--")}</p>
-            <p class="muted">閫€娆剧姸鎬?${escapeHtml(item.refundStatus || "--")}锛岄噾棰?${escapeHtml(formatMoneyFromCent(item.amount || 0))}</p>
-            ${item.refundReviewNote ? `<p class="muted">瀹℃牳澶囨敞锛?{escapeHtml(item.refundReviewNote)}</p>` : ""}
+            <p class="muted">订单状态：${escapeHtml(item.orderStatus || "--")}，支付状态：${escapeHtml(item.payStatus || "--")}</p>
+            <p class="muted">退款状态：${escapeHtml(item.refundStatus || "--")}，金额：${escapeHtml(formatMoneyFromCent(item.amount || 0))}</p>
+            ${item.refundReviewNote ? `<p class="muted">审核备注：${escapeHtml(item.refundReviewNote)}</p>` : ""}
             <div class="button-row section-block">
-              <a class="button button-secondary" href="${ROUTES.passenger.orderDetail}?orderId=${encodeURIComponent(item.id || "")}">鏌ョ湅璁㈠崟</a>
+              <a class="button button-secondary" href="${ROUTES.passenger.orderDetail}?orderId=${encodeURIComponent(item.id || "")}">查看订单</a>
             </div>
           </div>
         `).join("")}
@@ -5818,7 +5949,7 @@
       <div class="section-block">
         ${refundRules.map((item) => `
           <div class="info-card">
-            <strong>閫€娆捐鍒?/strong>
+            <strong>退款规则</strong>
             <p class="muted">${escapeHtml(item)}</p>
           </div>
         `).join("")}
@@ -5836,7 +5967,7 @@
       <div class="section-block">
         ${hints.map((item) => `
           <div class="info-card">
-            <strong>琛ュ厖鎻愮ず</strong>
+            <strong>补充提示</strong>
             <p class="muted">${escapeHtml(item)}</p>
           </div>
         `).join("")}
@@ -5852,7 +5983,7 @@
 
     return `
       <div class="section-block">
-        <strong>寤鸿杩介棶</strong>
+        <strong>建议追问</strong>
         <div class="button-row section-block">
           ${items.map((item) => `
             <button class="button button-ghost" type="button" data-ai-suggestion="${escapeHtml(item)}">${escapeHtml(item)}</button>
@@ -5866,7 +5997,7 @@
     if (intent === "route") {
       return `
         <div class="button-row section-block">
-          <a class="button button-primary" href="${ROUTES.passenger.search}">鍘昏喘绁?/a>
+          <a class="button button-primary" href="${ROUTES.passenger.search}">去购票</a>
         </div>
       `;
     }
@@ -5874,7 +6005,7 @@
     if (intent === "orders") {
       return `
         <div class="button-row section-block">
-          <a class="button button-primary" href="${ROUTES.passenger.orders}">鏌ョ湅璁㈠崟鍒楄〃</a>
+          <a class="button button-primary" href="${ROUTES.passenger.orders}">查看订单列表</a>
         </div>
       `;
     }
@@ -5884,13 +6015,13 @@
       if (firstOrder?.id) {
         return `
           <div class="button-row section-block">
-            <a class="button button-primary" href="${ROUTES.passenger.orderDetail}?orderId=${encodeURIComponent(firstOrder.id)}">鏌ョ湅閫€娆剧浉鍏宠鍗?/a>
+            <a class="button button-primary" href="${ROUTES.passenger.orderDetail}?orderId=${encodeURIComponent(firstOrder.id)}">查看退款相关订单</a>
           </div>
         `;
       }
       return `
         <div class="button-row section-block">
-          <a class="button button-primary" href="${ROUTES.passenger.orders}">鍘昏鍗曢〉鏌ョ湅閫€娆剧姸鎬?/a>
+          <a class="button button-primary" href="${ROUTES.passenger.orders}">去订单页查看退款状态</a>
         </div>
       `;
     }
@@ -5899,7 +6030,7 @@
   }
 
   function buildPassengerAiRichHtml(data) {
-    const reply = String(data?.reply || "").trim() || "鏆傛椂娌℃湁鐢熸垚鍥炲";
+    const reply = String(data?.reply || "").trim() || "暂时没有生成回复";
     const intent = String(data?.intent || "");
     const context = data?.context || null;
     const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
@@ -5917,22 +6048,22 @@
   }
 
   function buildPassengerAiErrorHtml(error) {
-    const message = String(error?.message || "璇锋眰澶辫触锛岃绋嶅悗閲嶈瘯").trim();
+    const message = String(error?.message || "请求失败，请稍后重试").trim();
 
-    if (message.includes("unauthorized") || message.includes("not logged in")) {
+    if (message.includes("unauthorized") || message.includes("not logged in") || message.includes("Authorization")) {
       return `
-        <div>璇峰厛鐧诲綍锛屽啀鏌ヨ涓汉璁㈠崟鎴栭€€娆句俊鎭€?/div>
+        <div>请先登录，再查询个人订单或退款信息。</div>
         <div class="section-block">
-          <a class="button button-primary" href="${ROUTES.auth.login}">鍘荤櫥褰?/a>
+          <a class="button button-primary" href="${ROUTES.auth.login}">去登录</a>
         </div>
       `;
     }
 
     if (message.includes("startCity") || message.includes("endCity") || message.includes("date")) {
       return `
-        <div>璇疯ˉ鍏呭嚭鍙戝湴銆佺洰鐨勫湴鍜屾棩鏈燂紝渚嬪锛氬府鎴戞煡鏄庡ぉ鏉窞鍒拌嫃宸炵殑绁ㄣ€?/div>
+        <div>请补充出发地、目的地和日期，例如：帮我查明天杭州到苏州的票。</div>
         <div class="section-block">
-          <button class="button button-ghost" type="button" data-ai-suggestion="甯垜鏌ユ槑澶╂澀宸炲埌鑻忓窞鐨勭エ">浣跨敤绀轰緥杩介棶</button>
+          <button class="button button-ghost" type="button" data-ai-suggestion="帮我查明天杭州到苏州的票">使用示例追问</button>
         </div>
       `;
     }
@@ -5941,8 +6072,8 @@
       <div>${escapeHtml(message)}</div>
       <div class="section-block">
         <div class="info-card">
-          <strong>鍥為€€寤鸿</strong>
-          <p class="muted">鍙互鎹竴绉嶆洿瀹屾暣鐨勯棶娉曪紝渚嬪锛氬府鎴戞煡鏄庡ぉ鏉窞鍒拌嫃宸炵殑绁紱甯垜鐪嬩笅鎴戠殑璁㈠崟锛涙垜杩欑瑪璁㈠崟鑳介€€娆惧悧銆?/p>
+          <strong>回退建议</strong>
+          <p class="muted">可以换一种更完整的问法，例如：帮我查明天杭州到苏州的票；帮我看下我的订单；我这笔订单能退款吗。</p>
         </div>
       </div>
     `;
@@ -5960,21 +6091,166 @@
       return;
     }
 
-    const conversation = [];
+    const auth = readAuth() || {};
+    const aiUserKey = auth.id || auth.userId || auth.phone || "guest";
+    const aiSessionsKey = `tripverse_passenger_ai_sessions_${aiUserKey}`;
+    const fallbackHistoryKey = `tripverse_passenger_ai_history_${aiUserKey}`;
+    const fallbackDraftKey = `${fallbackHistoryKey}_draft`;
+    const initialGreeting = aiChat.innerHTML;
+    let sessionState = null;
 
-    const appendMessage = (role, title, content, trustedHtml = false) => {
+    const createSession = (title) => ({
+      id: `ai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      title: title || "新窗口",
+      messages: [],
+      draft: "",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const readSessions = () => {
+      try {
+        const raw = window.localStorage.getItem(aiSessionsKey);
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (parsed && Array.isArray(parsed.sessions) && parsed.sessions.length) {
+          const activeId = parsed.sessions.some((session) => session.id === parsed.activeId)
+            ? parsed.activeId
+            : parsed.sessions[0].id;
+          return { activeId, sessions: parsed.sessions };
+        }
+      } catch (_) {
+        // Fall through to migration/default.
+      }
+
+      const migratedSession = createSession("历史窗口");
+      try {
+        const oldRaw = window.localStorage.getItem(fallbackHistoryKey);
+        const oldParsed = oldRaw ? JSON.parse(oldRaw) : null;
+        migratedSession.messages = Array.isArray(oldParsed?.messages) ? oldParsed.messages : [];
+        migratedSession.draft = window.localStorage.getItem(fallbackDraftKey) || "";
+      } catch (_) {
+        // Ignore old history migration failures.
+      }
+
+      const firstSession = migratedSession.messages.length || migratedSession.draft ? migratedSession : createSession("新窗口");
+      return {
+        activeId: firstSession.id,
+        sessions: [firstSession],
+      };
+    };
+
+    const saveSessions = () => {
+      try {
+        window.localStorage.setItem(aiSessionsKey, JSON.stringify(sessionState));
+      } catch (_) {
+        // Ignore storage failures.
+      }
+    };
+
+    const getActiveSession = () => {
+      if (!sessionState.sessions.length) {
+        const session = createSession("新窗口");
+        sessionState.sessions.push(session);
+        sessionState.activeId = session.id;
+      }
+      const activeSession = sessionState.sessions.find((session) => session.id === sessionState.activeId) || sessionState.sessions[0];
+      sessionState.activeId = activeSession.id;
+      return activeSession;
+    };
+
+    const buildConversation = (session) => {
+      const conversation = [];
+      (session.messages || []).forEach((item) => {
+        if (item.role === "user") {
+          conversation.push({ role: "user", content: String(item.content || "") });
+        } else if (item.role === "ai") {
+          const plainText = String(item.content || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+          if (plainText) {
+            conversation.push({ role: "assistant", content: plainText });
+          }
+        }
+      });
+      return conversation;
+    };
+
+    const sessionShell = document.createElement("div");
+    sessionShell.className = "ai-session-shell";
+    sessionShell.innerHTML = `
+      <div class="ai-session-tabs" data-ai-session-tabs></div>
+      <div class="button-row ai-session-actions">
+        <button class="button button-secondary" type="button" data-ai-session-new>新建窗口</button>
+        <button class="button button-ghost" type="button" data-ai-session-delete>删除当前窗口</button>
+      </div>
+    `;
+    aiChat.parentNode.insertBefore(sessionShell, aiChat);
+    const sessionTabs = sessionShell.querySelector("[data-ai-session-tabs]");
+
+    const renderSessionTabs = () => {
+      const activeSession = getActiveSession();
+      sessionTabs.innerHTML = sessionState.sessions.map((session, index) => {
+        const activeClass = session.id === activeSession.id ? " is-active" : "";
+        const title = session.title || `窗口 ${index + 1}`;
+        return `<button class="ai-session-tab${activeClass}" type="button" data-ai-session-id="${escapeHtml(session.id)}">${escapeHtml(title)}</button>`;
+      }).join("");
+    };
+
+    const renderMessage = (role, title, content, trustedHtml = false) => {
       const node = document.createElement("div");
       node.className = `message ${role}`;
       node.innerHTML = trustedHtml
-        ? `<strong>${title}</strong><div>${content}</div>`
-        : `<strong>${title}</strong><div>${escapeHtml(content)}</div>`;
+        ? `<strong>${escapeHtml(title)}</strong><div>${content}</div>`
+        : `<strong>${escapeHtml(title)}</strong><div>${escapeHtml(content)}</div>`;
       aiChat.appendChild(node);
       aiChat.scrollTop = aiChat.scrollHeight;
     };
 
+    const renderActiveSession = () => {
+      const activeSession = getActiveSession();
+      aiChat.innerHTML = initialGreeting;
+      (activeSession.messages || []).forEach((item) => {
+        renderMessage(item.role, item.title, item.content || "", Boolean(item.trustedHtml));
+      });
+      aiInput.value = activeSession.draft || "";
+      renderSessionTabs();
+    };
+
+    const updateSessionTitle = (session, firstQuestion) => {
+      if (!session || !firstQuestion || session.messages.filter((item) => item.role === "user").length > 1) {
+        return;
+      }
+      const text = String(firstQuestion || "").trim();
+      session.title = text.length > 12 ? `${text.slice(0, 12)}...` : text || "新窗口";
+    };
+
+    const appendMessageToSession = (session, role, title, content, trustedHtml = false) => {
+      const message = { role, title, content, trustedHtml: Boolean(trustedHtml), createdAt: new Date().toISOString() };
+      session.messages = [...(session.messages || []), message].slice(-40);
+      session.updatedAt = new Date().toISOString();
+      if (role === "user") {
+        updateSessionTitle(session, content);
+      }
+    };
+
+    const appendMessage = (role, title, content, trustedHtml = false) => {
+      const activeSession = getActiveSession();
+      appendMessageToSession(activeSession, role, title, content, trustedHtml);
+      saveSessions();
+      renderMessage(role, title, content, trustedHtml);
+      renderSessionTabs();
+    };
+
+    const saveAiDraft = () => {
+      const activeSession = getActiveSession();
+      activeSession.draft = aiInput.value || "";
+      activeSession.updatedAt = new Date().toISOString();
+      saveSessions();
+    };
+
     const askAi = async (value) => {
+      const activeSession = getActiveSession();
+      const activeId = activeSession.id;
       appendMessage("user", "你", value);
-      conversation.push({ role: "user", content: value });
+      const conversation = buildConversation(getActiveSession());
 
       const typingNode = document.createElement("div");
       typingNode.className = "message ai";
@@ -6015,8 +6291,11 @@
       }
 
       aiInput.value = "";
+      saveAiDraft();
       await askAi(value);
     });
+
+    aiInput.addEventListener("input", saveAiDraft);
 
     aiChat.addEventListener("click", async (event) => {
       const button = event.target.closest("[data-ai-suggestion]");
@@ -6031,9 +6310,12 @@
 
       if (aiInput) {
         aiInput.value = value;
+        saveAiDraft();
       }
       await askAi(value);
     });
+
+    restoreAiState();
   }
 
     function renderPassengerAiRouteCards(context) {
@@ -6085,15 +6367,24 @@
                     <strong>第 ${index + 1} 段：${escapeHtml(leg.route || "--")}</strong>
                     <p class="muted">${escapeHtml(leg.departureTime || "--")} - ${escapeHtml(leg.arrivalTime || "--")}</p>
                     <p class="muted">${escapeHtml(leg.vehicleType || "--")}，票价 ${escapeHtml(formatMoneyFromCent(leg.priceCent || 0))}，余座 ${Number(leg.seatAvailable || 0)}</p>
+                    <div class="button-row section-block">
+                      <a class="button button-secondary" href="${buildTicketDetailHref(leg.tripId)}">查看第 ${index + 1} 段</a>
+                      <a class="button button-primary" href="${buildCheckoutHref(leg.tripId)}">购买第 ${index + 1} 段</a>
+                    </div>
                   </div>
                 `).join("")}
               </div>`
             : "";
           const actions = item.kind === "transfer" && legs.length
             ? legs.map((leg, index) => `
-                <a class="button button-secondary" href="${ROUTES.passenger.tripDetail}?ticketId=${encodeURIComponent(leg.tripId || "")}">查看第 ${index + 1} 段</a>
+                <a class="button button-secondary" href="${buildTicketDetailHref(leg.tripId)}">查看第 ${index + 1} 段</a>
+                <a class="button button-primary" href="${buildCheckoutHref(leg.tripId)}">购买第 ${index + 1} 段</a>
               `).join("")
-            : `<a class="button button-secondary" href="${ROUTES.passenger.tripDetail}?ticketId=${encodeURIComponent(item.id || "")}">查看详情</a>`;
+            : `
+                <a class="button button-secondary" href="${buildTicketDetailHref(item.id)}">查看详情</a>
+                <a class="button button-primary" href="${buildCheckoutHref(item.id)}">去下单</a>
+              `;
+          const stationLinks = item.kind !== "transfer" ? renderStationLinks(item.stops, item.id) : "";
 
           return `
             <div class="info-card">
@@ -6101,6 +6392,7 @@
               <p class="muted">${escapeHtml(item.departureTime || "--")} - ${escapeHtml(item.arrivalTime || "--")}</p>
               <p class="muted">余座 ${Number(item.seatAvailable || 0)}，票价 ${escapeHtml(formatMoneyFromCent(item.priceCent || 0))}</p>
               <p class="muted">${escapeHtml(item.vehicleType || "--")}</p>
+              ${stationLinks}
               ${transferMeta}
               ${legsHtml}
               <div class="button-row section-block">
@@ -6127,9 +6419,13 @@
 
     return `
       <div class="info-card">
-        <strong>璁㈠崟鎽樿</strong>
+        <strong>订单摘要</strong>
         <p class="muted">
-          鎬昏鍗?${Number(summary.totalCount || 0)}锛?          寰呮敮浠?${Number(summary.pendingPaymentCount || 0)}锛?          寰呮牳閿€ ${Number(summary.pendingVerificationCount || 0)}锛?          宸插畬鎴?${Number(summary.completedCount || 0)}锛?          閫€娆剧敵璇?${Number(summary.refundRequestedCount || 0)}
+          总订单 ${Number(summary.totalCount || 0)}，
+          待支付 ${Number(summary.pendingPaymentCount || 0)}，
+          待核销 ${Number(summary.pendingVerificationCount || 0)}，
+          已完成 ${Number(summary.completedCount || 0)}，
+          退款申请 ${Number(summary.refundRequestedCount || 0)}
         </p>
       </div>
     `;
@@ -6145,13 +6441,13 @@
       <div class="section-block">
         ${orders.slice(0, 4).map((item) => `
           <div class="info-card">
-            <strong>${escapeHtml(item.orderNo || `璁㈠崟 #${item.id || "--"}`)}</strong>
+            <strong>${escapeHtml(item.orderNo || `订单 #${item.id || "--"}`)}</strong>
             <p class="muted">${escapeHtml(item.route || "--")} ${escapeHtml(item.departureTime || "")}</p>
-            <p class="muted">璁㈠崟鐘舵€?${escapeHtml(item.orderStatus || "--")}锛屾敮浠樼姸鎬?${escapeHtml(item.payStatus || "--")}</p>
-            <p class="muted">閫€娆剧姸鎬?${escapeHtml(item.refundStatus || "--")}锛岄噾棰?${escapeHtml(formatMoneyFromCent(item.amount || 0))}</p>
-            ${item.refundReviewNote ? `<p class="muted">瀹℃牳澶囨敞锛?{escapeHtml(item.refundReviewNote)}</p>` : ""}
+            <p class="muted">订单状态：${escapeHtml(item.orderStatus || "--")}，支付状态：${escapeHtml(item.payStatus || "--")}</p>
+            <p class="muted">退款状态：${escapeHtml(item.refundStatus || "--")}，金额：${escapeHtml(formatMoneyFromCent(item.amount || 0))}</p>
+            ${item.refundReviewNote ? `<p class="muted">审核备注：${escapeHtml(item.refundReviewNote)}</p>` : ""}
             <div class="button-row section-block">
-              <a class="button button-secondary" href="${ROUTES.passenger.orderDetail}?orderId=${encodeURIComponent(item.id || "")}">鏌ョ湅璁㈠崟</a>
+              <a class="button button-secondary" href="${ROUTES.passenger.orderDetail}?orderId=${encodeURIComponent(item.id || "")}">查看订单</a>
             </div>
           </div>
         `).join("")}
@@ -6169,7 +6465,7 @@
       <div class="section-block">
         ${refundRules.map((item) => `
           <div class="info-card">
-            <strong>閫€娆捐鍒?/strong>
+            <strong>退款规则</strong>
             <p class="muted">${escapeHtml(item)}</p>
           </div>
         `).join("")}
@@ -6187,7 +6483,7 @@
       <div class="section-block">
         ${hints.map((item) => `
           <div class="info-card">
-            <strong>琛ュ厖鎻愮ず</strong>
+            <strong>补充提示</strong>
             <p class="muted">${escapeHtml(item)}</p>
           </div>
         `).join("")}
@@ -6203,7 +6499,7 @@
 
     return `
       <div class="section-block">
-        <strong>寤鸿杩介棶</strong>
+        <strong>建议追问</strong>
         <div class="button-row section-block">
           ${items.map((item) => `
             <button class="button button-ghost" type="button" data-ai-suggestion="${escapeHtml(item)}">${escapeHtml(item)}</button>
@@ -6217,7 +6513,7 @@
     if (intent === "route") {
       return `
         <div class="button-row section-block">
-          <a class="button button-primary" href="${ROUTES.passenger.search}">鍘昏喘绁?/a>
+          <a class="button button-primary" href="${ROUTES.passenger.search}">去购票</a>
         </div>
       `;
     }
@@ -6225,7 +6521,7 @@
     if (intent === "orders") {
       return `
         <div class="button-row section-block">
-          <a class="button button-primary" href="${ROUTES.passenger.orders}">鏌ョ湅璁㈠崟鍒楄〃</a>
+          <a class="button button-primary" href="${ROUTES.passenger.orders}">查看订单列表</a>
         </div>
       `;
     }
@@ -6235,13 +6531,13 @@
       if (firstOrder?.id) {
         return `
           <div class="button-row section-block">
-            <a class="button button-primary" href="${ROUTES.passenger.orderDetail}?orderId=${encodeURIComponent(firstOrder.id)}">鏌ョ湅閫€娆剧浉鍏宠鍗?/a>
+            <a class="button button-primary" href="${ROUTES.passenger.orderDetail}?orderId=${encodeURIComponent(firstOrder.id)}">查看退款相关订单</a>
           </div>
         `;
       }
       return `
         <div class="button-row section-block">
-          <a class="button button-primary" href="${ROUTES.passenger.orders}">鍘昏鍗曢〉鏌ョ湅閫€娆剧姸鎬?/a>
+          <a class="button button-primary" href="${ROUTES.passenger.orders}">去订单页查看退款状态</a>
         </div>
       `;
     }
@@ -6250,7 +6546,7 @@
   }
 
   function buildPassengerAiRichHtml(data) {
-    const reply = String(data?.reply || "").trim() || "鏆傛椂娌℃湁鐢熸垚鍥炲";
+    const reply = String(data?.reply || "").trim() || "暂时没有生成回复";
     const intent = String(data?.intent || "");
     const context = data?.context || null;
     const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
@@ -6268,22 +6564,22 @@
   }
 
   function buildPassengerAiErrorHtml(error) {
-    const message = String(error?.message || "璇锋眰澶辫触锛岃绋嶅悗閲嶈瘯").trim();
+    const message = String(error?.message || "请求失败，请稍后重试").trim();
 
-    if (message.includes("unauthorized") || message.includes("not logged in")) {
+    if (message.includes("unauthorized") || message.includes("not logged in") || message.includes("Authorization")) {
       return `
-        <div>璇峰厛鐧诲綍锛屽啀鏌ヨ涓汉璁㈠崟鎴栭€€娆句俊鎭€?/div>
+        <div>请先登录，再查询个人订单或退款信息。</div>
         <div class="section-block">
-          <a class="button button-primary" href="${ROUTES.auth.login}">鍘荤櫥褰?/a>
+          <a class="button button-primary" href="${ROUTES.auth.login}">去登录</a>
         </div>
       `;
     }
 
     if (message.includes("startCity") || message.includes("endCity") || message.includes("date")) {
       return `
-        <div>璇疯ˉ鍏呭嚭鍙戝湴銆佺洰鐨勫湴鍜屾棩鏈燂紝渚嬪锛氬府鎴戞煡鏄庡ぉ鏉窞鍒拌嫃宸炵殑绁ㄣ€?/div>
+        <div>请补充出发地、目的地和日期，例如：帮我查明天杭州到苏州的票。</div>
         <div class="section-block">
-          <button class="button button-ghost" type="button" data-ai-suggestion="甯垜鏌ユ槑澶╂澀宸炲埌鑻忓窞鐨勭エ">浣跨敤绀轰緥杩介棶</button>
+          <button class="button button-ghost" type="button" data-ai-suggestion="帮我查明天杭州到苏州的票">使用示例追问</button>
         </div>
       `;
     }
@@ -6292,8 +6588,8 @@
       <div>${escapeHtml(message)}</div>
       <div class="section-block">
         <div class="info-card">
-          <strong>鍥為€€寤鸿</strong>
-          <p class="muted">鍙互鎹竴绉嶆洿瀹屾暣鐨勯棶娉曪紝渚嬪锛氬府鎴戞煡鏄庡ぉ鏉窞鍒拌嫃宸炵殑绁紱甯垜鐪嬩笅鎴戠殑璁㈠崟锛涙垜杩欑瑪璁㈠崟鑳介€€娆惧悧銆?/p>
+          <strong>回退建议</strong>
+          <p class="muted">可以换一种更完整的问法，例如：帮我查明天杭州到苏州的票；帮我看下我的订单；我这笔订单能退款吗。</p>
         </div>
       </div>
     `;
@@ -6311,21 +6607,162 @@
       return;
     }
 
-    const conversation = [];
+    const auth = readAuth() || {};
+    const aiUserKey = auth.id || auth.userId || auth.phone || "guest";
+    const aiSessionsKey = `tripverse_passenger_ai_sessions_${aiUserKey}`;
+    const fallbackHistoryKey = `tripverse_passenger_ai_history_${aiUserKey}`;
+    const fallbackDraftKey = `${fallbackHistoryKey}_draft`;
+    const initialGreeting = aiChat.innerHTML;
+    let sessionState = null;
 
-    const appendMessage = (role, title, content, trustedHtml = false) => {
+    const createSession = (title) => ({
+      id: `ai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      title: title || "新窗口",
+      messages: [],
+      draft: "",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const readSessions = () => {
+      try {
+        const raw = window.localStorage.getItem(aiSessionsKey);
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (parsed && Array.isArray(parsed.sessions) && parsed.sessions.length) {
+          const activeId = parsed.sessions.some((session) => session.id === parsed.activeId)
+            ? parsed.activeId
+            : parsed.sessions[0].id;
+          return { activeId, sessions: parsed.sessions };
+        }
+      } catch (_) {
+        // Fall through to migration/default.
+      }
+
+      const migratedSession = createSession("历史窗口");
+      try {
+        const oldRaw = window.localStorage.getItem(fallbackHistoryKey);
+        const oldParsed = oldRaw ? JSON.parse(oldRaw) : null;
+        migratedSession.messages = Array.isArray(oldParsed?.messages) ? oldParsed.messages : [];
+        migratedSession.draft = window.localStorage.getItem(fallbackDraftKey) || "";
+      } catch (_) {
+        // Ignore old history migration failures.
+      }
+
+      const firstSession = migratedSession.messages.length || migratedSession.draft ? migratedSession : createSession("新窗口");
+      return { activeId: firstSession.id, sessions: [firstSession] };
+    };
+
+    const saveSessions = () => {
+      try {
+        window.localStorage.setItem(aiSessionsKey, JSON.stringify(sessionState));
+      } catch (_) {
+        // Ignore storage failures.
+      }
+    };
+
+    const getActiveSession = () => {
+      if (!sessionState.sessions.length) {
+        const session = createSession("新窗口");
+        sessionState.sessions.push(session);
+        sessionState.activeId = session.id;
+      }
+      const activeSession = sessionState.sessions.find((session) => session.id === sessionState.activeId) || sessionState.sessions[0];
+      sessionState.activeId = activeSession.id;
+      return activeSession;
+    };
+
+    const buildConversation = (session) => {
+      const conversation = [];
+      (session.messages || []).forEach((item) => {
+        if (item.role === "user") {
+          conversation.push({ role: "user", content: String(item.content || "") });
+        } else if (item.role === "ai") {
+          const plainText = String(item.content || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+          if (plainText) {
+            conversation.push({ role: "assistant", content: plainText });
+          }
+        }
+      });
+      return conversation;
+    };
+
+    const sessionShell = document.createElement("div");
+    sessionShell.className = "ai-session-shell";
+    sessionShell.innerHTML = `
+      <div class="ai-session-tabs" data-ai-session-tabs></div>
+      <div class="button-row ai-session-actions">
+        <button class="button button-secondary" type="button" data-ai-session-new>新建窗口</button>
+        <button class="button button-ghost" type="button" data-ai-session-delete>删除当前窗口</button>
+      </div>
+    `;
+    aiChat.parentNode.insertBefore(sessionShell, aiChat);
+    const sessionTabs = sessionShell.querySelector("[data-ai-session-tabs]");
+
+    const renderSessionTabs = () => {
+      const activeSession = getActiveSession();
+      sessionTabs.innerHTML = sessionState.sessions.map((session, index) => {
+        const activeClass = session.id === activeSession.id ? " is-active" : "";
+        const title = session.title || `窗口 ${index + 1}`;
+        return `<button class="ai-session-tab${activeClass}" type="button" data-ai-session-id="${escapeHtml(session.id)}">${escapeHtml(title)}</button>`;
+      }).join("");
+    };
+
+    const renderMessage = (role, title, content, trustedHtml = false) => {
       const node = document.createElement("div");
       node.className = `message ${role}`;
       node.innerHTML = trustedHtml
-        ? `<strong>${title}</strong><div>${content}</div>`
-        : `<strong>${title}</strong><div>${escapeHtml(content)}</div>`;
+        ? `<strong>${escapeHtml(title)}</strong><div>${content}</div>`
+        : `<strong>${escapeHtml(title)}</strong><div>${escapeHtml(content)}</div>`;
       aiChat.appendChild(node);
       aiChat.scrollTop = aiChat.scrollHeight;
     };
 
+    const renderActiveSession = () => {
+      const activeSession = getActiveSession();
+      aiChat.innerHTML = initialGreeting;
+      (activeSession.messages || []).forEach((item) => {
+        renderMessage(item.role, item.title, item.content || "", Boolean(item.trustedHtml));
+      });
+      aiInput.value = activeSession.draft || "";
+      renderSessionTabs();
+    };
+
+    const updateSessionTitle = (session, firstQuestion) => {
+      if (!session || !firstQuestion || session.messages.filter((item) => item.role === "user").length > 1) {
+        return;
+      }
+      const text = String(firstQuestion || "").trim();
+      session.title = text.length > 12 ? `${text.slice(0, 12)}...` : text || "新窗口";
+    };
+
+    const appendMessageToSession = (session, role, title, content, trustedHtml = false) => {
+      const message = { role, title, content, trustedHtml: Boolean(trustedHtml), createdAt: new Date().toISOString() };
+      session.messages = [...(session.messages || []), message].slice(-40);
+      session.updatedAt = new Date().toISOString();
+      if (role === "user") {
+        updateSessionTitle(session, content);
+      }
+    };
+
+    const appendMessage = (role, title, content, trustedHtml = false) => {
+      const activeSession = getActiveSession();
+      appendMessageToSession(activeSession, role, title, content, trustedHtml);
+      saveSessions();
+      renderMessage(role, title, content, trustedHtml);
+      renderSessionTabs();
+    };
+
+    const saveAiDraft = () => {
+      const activeSession = getActiveSession();
+      activeSession.draft = aiInput.value || "";
+      activeSession.updatedAt = new Date().toISOString();
+      saveSessions();
+    };
+
     const askAi = async (value) => {
+      const activeId = getActiveSession().id;
       appendMessage("user", "你", value);
-      conversation.push({ role: "user", content: value });
+      const conversation = buildConversation(getActiveSession());
 
       const typingNode = document.createElement("div");
       typingNode.className = "message ai";
@@ -6343,31 +6780,46 @@
           aiChat.removeChild(typingNode);
         }
 
-        appendMessage("ai", "AI 助手", buildPassengerAiRichHtml(data), true);
-
-        const reply = String(data?.reply || "").trim();
-        if (reply) {
-          conversation.push({ role: "assistant", content: reply });
+        if (getActiveSession().id === activeId) {
+          appendMessage("ai", "AI 助手", buildPassengerAiRichHtml(data), true);
+        } else {
+          const targetSession = sessionState.sessions.find((session) => session.id === activeId);
+          if (targetSession) {
+            appendMessageToSession(targetSession, "ai", "AI 助手", buildPassengerAiRichHtml(data), true);
+            saveSessions();
+            renderSessionTabs();
+          }
         }
       } catch (error) {
         if (typingNode.parentNode === aiChat) {
           aiChat.removeChild(typingNode);
         }
-        appendMessage("ai", "AI 助手", buildPassengerAiErrorHtml(error), true);
+        const errorHtml = buildPassengerAiErrorHtml(error);
+        if (getActiveSession().id === activeId) {
+          appendMessage("ai", "AI 助手", errorHtml, true);
+        } else {
+          const targetSession = sessionState.sessions.find((session) => session.id === activeId);
+          if (targetSession) {
+            appendMessageToSession(targetSession, "ai", "AI 助手", errorHtml, true);
+            saveSessions();
+            renderSessionTabs();
+          }
+        }
       }
     };
 
     aiForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-
       const value = aiInput.value.trim();
       if (!value) {
         return;
       }
-
       aiInput.value = "";
+      saveAiDraft();
       await askAi(value);
     });
+
+    aiInput.addEventListener("input", saveAiDraft);
 
     aiChat.addEventListener("click", async (event) => {
       const button = event.target.closest("[data-ai-suggestion]");
@@ -6380,11 +6832,50 @@
         return;
       }
 
-      if (aiInput) {
-        aiInput.value = value;
-      }
+      aiInput.value = value;
+      saveAiDraft();
       await askAi(value);
     });
+
+    sessionTabs.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-ai-session-id]");
+      if (!button) {
+        return;
+      }
+      saveAiDraft();
+      sessionState.activeId = button.getAttribute("data-ai-session-id") || sessionState.activeId;
+      saveSessions();
+      renderActiveSession();
+    });
+
+    sessionShell.querySelector("[data-ai-session-new]").addEventListener("click", () => {
+      saveAiDraft();
+      const session = createSession(`窗口 ${sessionState.sessions.length + 1}`);
+      sessionState.sessions.unshift(session);
+      sessionState.activeId = session.id;
+      saveSessions();
+      renderActiveSession();
+      aiInput.focus();
+    });
+
+    sessionShell.querySelector("[data-ai-session-delete]").addEventListener("click", () => {
+      if (sessionState.sessions.length <= 1) {
+        const onlySession = getActiveSession();
+        onlySession.messages = [];
+        onlySession.draft = "";
+        onlySession.title = "新窗口";
+        onlySession.updatedAt = new Date().toISOString();
+      } else {
+        const currentId = getActiveSession().id;
+        sessionState.sessions = sessionState.sessions.filter((session) => session.id !== currentId);
+        sessionState.activeId = sessionState.sessions[0].id;
+      }
+      saveSessions();
+      renderActiveSession();
+    });
+
+    sessionState = readSessions();
+    renderActiveSession();
   }
 
   function initDriverDraftGenerator() {
@@ -7101,6 +7592,58 @@
     load();
   }
 
+  function initDriverTicketVerifyForm() {
+    const form = document.querySelector("[data-driver-ticket-verify-form]");
+    if (!form) {
+      return;
+    }
+
+    const resultBox = document.querySelector("[data-driver-ticket-verify-result]");
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const token = String(new FormData(form).get("token") || "").trim();
+      if (!token) {
+        showToast("请先粘贴电子票 token");
+        return;
+      }
+
+      const button = form.querySelector("button[type='submit']");
+      try {
+        if (button) {
+          button.disabled = true;
+          button.textContent = "核验中...";
+        }
+        const result = await api.post(API_ENDPOINTS.driver.verifyTicket, { token });
+        const ticket = result?.data || {};
+        if (resultBox) {
+          resultBox.innerHTML = `
+            <div class="info-card">
+              <strong>核验成功</strong>
+              <p class="muted">订单 #${escapeHtml(ticket.orderId || "")} 已完成核验。</p>
+              <div class="list-meta"><span>状态：${escapeHtml(ticket.status || "--")}</span><span>核验时间：${escapeHtml(formatFullDateTime(ticket.verifiedAt))}</span></div>
+            </div>
+          `;
+        }
+        showToast("电子票核验成功");
+      } catch (error) {
+        if (resultBox) {
+          resultBox.innerHTML = `
+            <div class="info-card">
+              <strong>核验失败</strong>
+              <p class="muted">${escapeHtml(error.message || "请检查 token 是否正确。")}</p>
+            </div>
+          `;
+        }
+        showToast(error.message || "电子票核验失败");
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "核验电子票";
+        }
+      }
+    });
+  }
+
   function initApp() {
     if (!requireAccess()) {
       return;
@@ -7123,6 +7666,7 @@
     hardenDriverPublishPageV2();
     hydrateDriverPublishDraftFromAi();
     initDriverTripDetailPage();
+    initDriverTicketVerifyForm();
     syncDriverTripOrderStatus();
     initTicketSearchPage();
     initTicketDetailPage();

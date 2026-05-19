@@ -1,0 +1,12 @@
+.git
+.idea
+.vscode
+**/*.log
+**/*.pid
+**/*.exe
+loadtests/results
+runtime
+backend/server
+backend/server.exe
+backend/server-*.log
+backend/server-*.pid

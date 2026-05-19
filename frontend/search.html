@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -9,111 +9,44 @@
 <body data-page="search">
   <header class="site-header">
     <div class="container nav-shell">
-      <a class="brand" href="index.html"><span class="brand-mark">TV</span><span>TripVerse</span></a>
-      <nav class="nav-links">
-        <a data-nav="home" href="index.html">首页</a>
-        <a data-nav="search" href="search.html">购票</a>
-        <a data-nav="orders" href="orders.html">订单</a>
-        <a data-nav="profile" href="profile.html">个人中心</a>
-        <a data-nav="ai" href="ai-assistant.html">AI 助手</a>
-      </nav>
-      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+      <a class="brand" href="index.html" aria-label="TripVerse 首页">
+        <span class="brand-mark">TV</span>
+        <span>TripVerse</span>
+      </a>
+      <nav class="nav-links" aria-label="主导航"></nav>
+      <button class="menu-button" type="button" data-nav-toggle aria-label="打开导航">菜单</button>
     </div>
     <div class="mobile-drawer">
-      <div class="container mobile-links">
-        <a data-nav="home" data-nav-close href="index.html">首页</a>
-        <a data-nav="search" data-nav-close href="search.html">购票</a>
-        <a data-nav="orders" data-nav-close href="orders.html">订单</a>
-        <a data-nav="profile" data-nav-close href="profile.html">个人中心</a>
-        <a data-nav="ai" data-nav-close href="ai-assistant.html">AI 助手</a>
-      </div>
+      <div class="container mobile-links"></div>
     </div>
   </header>
-
   <main class="page">
     <div class="container">
-      <div class="tab-strip">
-        <a class="is-active" href="search.html">票务搜索</a>
-        <a href="trip-detail.html">班次详情</a>
-        <a href="search.html">下单确认</a>
-        <a href="search.html">支付页</a>
-      </div>
-
+      <div class="tab-strip"><a class="is-active" href="search.html">票务搜索</a><a href="trip-detail.html">班次详情</a><a href="checkout.html">下单确认</a><a href="payment.html">支付</a></div>
       <section class="page-hero">
         <div class="hero-copy">
-          <span class="eyebrow">乘客端 / 搜索页</span>
-          <h1 class="section-title">查找合适的班次</h1>
-          <p class="lede">输入起点、终点和日期后，页面会直接调用后端票务搜索接口，结果中的“查看详情”会带着真实的 `ticketId` 进入班次详情页。</p>
+          <span class="eyebrow">乘客端 / 搜索</span>
+          <h1 class="section-title">查找合适的出行班次</h1>
+          <p class="lede">输入起点、终点和日期后，页面会调用后端票务搜索接口；搜索、加载、空状态和错误状态都在同一区域清晰反馈。</p>
           <div class="form-grid section-block" data-ticket-search-form>
-            <div class="field span-3">
-              <label>出发地</label>
-              <input name="startCity" type="text" value="杭州">
-            </div>
-            <div class="field span-3">
-              <label>目的地</label>
-              <input name="endCity" type="text" value="苏州">
-            </div>
-            <div class="field span-3">
-              <label>日期</label>
-              <input name="date" type="date" value="2026-04-24">
-            </div>
-            <div class="field span-3">
-              <label>偏好</label>
-              <select name="preference">
-                <option>优先推荐</option>
-                <option>最快到达</option>
-                <option>最低价格</option>
-              </select>
-            </div>
-            <div class="field span-3">
-              <label>出行方式</label>
-              <label class="checkbox-row">
-                <input name="allowTransfer" type="checkbox" checked>
-                <span>允许一次中转</span>
-              </label>
-            </div>
+            <div class="field span-3"><label for="startCity">出发地</label><input id="startCity" name="startCity" value="杭州"></div>
+            <div class="field span-3"><label for="endCity">目的地</label><input id="endCity" name="endCity" value="苏州"></div>
+            <div class="field span-3"><label for="date">日期</label><input id="date" name="date" type="date" value="2026-05-19"></div>
+            <div class="field span-3"><label for="preference">偏好</label><select id="preference" name="preference"><option>优先推荐</option><option>最快到达</option><option>最低价格</option></select></div>
+            <div class="field span-3"><label class="checkbox-row"><input name="allowTransfer" type="checkbox" checked><span>允许一次中转</span></label></div>
           </div>
         </div>
       </section>
-
       <section class="dashboard-grid">
         <article class="panel">
-          <div class="row-between">
-            <div>
-              <h2 class="subhead">搜索结果</h2>
-              <p class="muted">这里不会再保留默认班次卡片，所有内容都以后端返回的数据为准。</p>
-            </div>
-            <span class="mini-chip" data-ticket-search-count>加载中</span>
-          </div>
-          <div class="list-stack section-block" data-ticket-search-results>
-            <div class="info-card">
-              <strong>正在加载班次</strong>
-              <p class="muted">请稍候，页面正在请求后端搜索接口。</p>
-            </div>
-          </div>
+          <div class="row-between"><div><h2 class="subhead">搜索结果</h2><p class="muted">结果由接口返回，卡片会保留真实 ticketId 进入详情页。</p></div><span class="mini-chip" data-ticket-search-count>加载中</span></div>
+          <div class="list-stack section-block" data-ticket-search-results><div class="info-card"><strong>正在加载班次</strong><p class="muted">请稍候，正在请求后端搜索接口。</p><div class="skeleton"></div></div></div>
         </article>
-
-        <aside class="panel">
-          <h2 class="subhead">使用提示</h2>
-          <div class="list-stack section-block">
-            <div class="info-card">
-              <strong>正确链路</strong>
-              <p class="muted">搜索结果 -> 查看详情 -> 去下单 -> 提交订单并去支付。</p>
-            </div>
-            <div class="info-card">
-              <strong>为什么不能直接开下单页</strong>
-              <p class="muted">因为下单确认页必须先拿到某个具体班次的 `ticketId`，才能创建真实订单。</p>
-            </div>
-          </div>
-        </aside>
+        <aside class="panel"><h2 class="subhead">搜索提示</h2><div class="list-stack section-block"><div class="info-card"><strong>完整链路</strong><p class="muted">搜索结果 -> 查看详情 -> 下单确认 -> 创建订单并支付。</p></div><div class="info-card"><strong>空状态处理</strong><p class="muted">若暂无班次，可更换日期或保留中转选项重新搜索。</p></div></div></aside>
       </section>
     </div>
   </main>
-
-  <footer class="footer">
-    <div class="container footer-card">搜索页已清除静态默认卡片，只展示真实搜索结果。</div>
-  </footer>
-  <script src="assets/runtime-config.js?v=20260506-search-clean"></script>
-  <script src="assets/app.js?v=20260506-search-clean"></script>
+  <script src="assets/runtime-config.js?v=20260519-blue-ui"></script>
+  <script src="assets/app.js?v=20260519-blue-ui"></script>
 </body>
 </html>

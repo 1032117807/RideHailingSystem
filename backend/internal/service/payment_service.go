@@ -17,12 +17,13 @@ type CreatePaymentInput struct {
 }
 
 type PaymentService struct {
-	paymentRepo repository.PaymentRepository
-	orderRepo   repository.OrderRepository
+	paymentRepo   repository.PaymentRepository
+	orderRepo     repository.OrderRepository
+	ticketService *ElectronicTicketService
 }
 
-func NewPaymentService(paymentRepo repository.PaymentRepository, orderRepo repository.OrderRepository) *PaymentService {
-	return &PaymentService{paymentRepo: paymentRepo, orderRepo: orderRepo}
+func NewPaymentService(paymentRepo repository.PaymentRepository, orderRepo repository.OrderRepository, ticketService *ElectronicTicketService) *PaymentService {
+	return &PaymentService{paymentRepo: paymentRepo, orderRepo: orderRepo, ticketService: ticketService}
 }
 
 func (s *PaymentService) CreatePayment(ctx context.Context, currentUserID uint, currentUserRole string, input CreatePaymentInput) (*model.Payment, error) {
@@ -128,6 +129,17 @@ func (s *PaymentService) MockPaySuccess(ctx context.Context, currentUserID uint,
 
 	if err := s.paymentRepo.MarkPaid(ctx, paymentID); err != nil {
 		return nil, err
+	}
+	if s.ticketService != nil {
+		paidOrder, orderErr := s.orderRepo.GetByID(ctx, payment.OrderID)
+		if orderErr != nil {
+			return nil, orderErr
+		}
+		if paidOrder != nil {
+			if _, ticketErr := s.ticketService.EnsureForOrder(ctx, paidOrder); ticketErr != nil {
+				return nil, ticketErr
+			}
+		}
 	}
 	return s.paymentRepo.GetByID(ctx, paymentID)
 }

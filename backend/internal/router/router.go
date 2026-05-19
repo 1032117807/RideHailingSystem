@@ -9,17 +9,22 @@ import (
 )
 
 type Dependencies struct {
-	AuthHandler         *handler.AuthHandler
-	UserHandler         *handler.UserHandler
-	DriverTripHandler   *handler.DriverTripHandler
-	AIHandler           *handler.AIHandler
-	KnowledgeHandler    *handler.KnowledgeHandler
-	RiskHandler         *handler.RiskHandler
-	TicketHandler       *handler.TicketHandler
-	OrderHandler        *handler.OrderHandler
-	PaymentHandler      *handler.PaymentHandler
-	NotificationHandler *handler.NotificationHandler
-	AuthMiddleware      func(http.Handler) http.Handler
+	AuthHandler             *handler.AuthHandler
+	UserHandler             *handler.UserHandler
+	DriverTripHandler       *handler.DriverTripHandler
+	AIHandler               *handler.AIHandler
+	KnowledgeHandler        *handler.KnowledgeHandler
+	RiskHandler             *handler.RiskHandler
+	TicketHandler           *handler.TicketHandler
+	OrderHandler            *handler.OrderHandler
+	PaymentHandler          *handler.PaymentHandler
+	NotificationHandler     *handler.NotificationHandler
+	ElectronicTicketHandler *handler.ElectronicTicketHandler
+	AuditHandler            *handler.AuditHandler
+	PassengerHandler        *handler.PassengerHandler
+	PriceAlertHandler       *handler.PriceAlertHandler
+	DriverProfileHandler    *handler.DriverProfileHandler
+	AuthMiddleware          func(http.Handler) http.Handler
 
 	EnableMockPayment bool
 	TokenUsageHandler *handler.TokenUsageHandler
@@ -55,9 +60,6 @@ func NewRouter(dep Dependencies) http.Handler {
 	mount(mux, "/api/users/verify-real-name", map[string]http.Handler{
 		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.UserHandler.VerifyRealName)),
 	})
-	mount(mux, "/api/users/switch-role", map[string]http.Handler{
-		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.UserHandler.SwitchRole)),
-	})
 	mount(mux, "/api/users/account/status", map[string]http.Handler{
 		http.MethodGet: dep.AuthMiddleware(http.HandlerFunc(dep.UserHandler.GetAccountStatus)),
 	})
@@ -82,6 +84,20 @@ func NewRouter(dep Dependencies) http.Handler {
 	mount(mux, "/api/notifications/read-all", map[string]http.Handler{
 		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.NotificationHandler.MarkAllMyNotificationsRead)),
 	})
+	mount(mux, "/api/passengers", map[string]http.Handler{
+		http.MethodGet:  dep.AuthMiddleware(http.HandlerFunc(dep.PassengerHandler.List)),
+		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.PassengerHandler.Create)),
+	})
+	mount(mux, "/api/passengers/{passengerId}", map[string]http.Handler{
+		http.MethodDelete: dep.AuthMiddleware(http.HandlerFunc(dep.PassengerHandler.Delete)),
+	})
+	mount(mux, "/api/price-alerts", map[string]http.Handler{
+		http.MethodGet:  dep.AuthMiddleware(http.HandlerFunc(dep.PriceAlertHandler.List)),
+		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.PriceAlertHandler.Create)),
+	})
+	mount(mux, "/api/price-alerts/{alertId}/disable", map[string]http.Handler{
+		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.PriceAlertHandler.Disable)),
+	})
 
 	mount(mux, "/api/driver/trips", map[string]http.Handler{
 		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.DriverTripHandler.CreateTrip)),
@@ -93,12 +109,23 @@ func NewRouter(dep Dependencies) http.Handler {
 	mount(mux, "/api/driver/income", map[string]http.Handler{
 		http.MethodGet: dep.AuthMiddleware(http.HandlerFunc(dep.DriverTripHandler.GetIncome)),
 	})
+	mount(mux, "/api/driver/profile", map[string]http.Handler{
+		http.MethodGet: dep.AuthMiddleware(http.HandlerFunc(dep.DriverProfileHandler.GetProfile)),
+		http.MethodPut: dep.AuthMiddleware(http.HandlerFunc(dep.DriverProfileHandler.UpsertProfile)),
+	})
+	mount(mux, "/api/driver/vehicles", map[string]http.Handler{
+		http.MethodGet:  dep.AuthMiddleware(http.HandlerFunc(dep.DriverProfileHandler.ListVehicles)),
+		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.DriverProfileHandler.CreateVehicle)),
+	})
 
 	mount(mux, "/api/driver/trips/{tripId}", map[string]http.Handler{
 		http.MethodGet: dep.AuthMiddleware(http.HandlerFunc(dep.DriverTripHandler.GetTripDetail)),
 	})
 	mount(mux, "/api/driver/orders/{orderId}/verify", map[string]http.Handler{
 		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.OrderHandler.VerifyOrderByDriver)),
+	})
+	mount(mux, "/api/driver/tickets/verify", map[string]http.Handler{
+		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.ElectronicTicketHandler.VerifyByDriver)),
 	})
 
 	mount(mux, "/api/tickets/search", map[string]http.Handler{
@@ -122,6 +149,9 @@ func NewRouter(dep Dependencies) http.Handler {
 	})
 	mount(mux, "/api/orders/{orderId}/refund", map[string]http.Handler{
 		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.OrderHandler.RequestRefund)),
+	})
+	mount(mux, "/api/orders/{orderId}/ticket", map[string]http.Handler{
+		http.MethodGet: dep.AuthMiddleware(http.HandlerFunc(dep.ElectronicTicketHandler.GetMyOrderTicket)),
 	})
 	mount(mux, "/api/admin/orders", map[string]http.Handler{
 		http.MethodGet: dep.AuthMiddleware(http.HandlerFunc(dep.OrderHandler.ListRefundOrdersForAdmin)),
@@ -151,6 +181,12 @@ func NewRouter(dep Dependencies) http.Handler {
 	})
 	mount(mux, "/api/admin/orders/{orderId}/refund/reject", map[string]http.Handler{
 		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.OrderHandler.RejectRefundByAdmin)),
+	})
+	mount(mux, "/api/admin/orders/{orderId}/refund/audit-logs", map[string]http.Handler{
+		http.MethodGet: dep.AuthMiddleware(http.HandlerFunc(dep.AuditHandler.ListRefundAuditLogs)),
+	})
+	mount(mux, "/api/admin/audit-logs", map[string]http.Handler{
+		http.MethodGet: dep.AuthMiddleware(http.HandlerFunc(dep.AuditHandler.ListAuditLogs)),
 	})
 	mount(mux, "/api/payments/create", map[string]http.Handler{
 		http.MethodPost: dep.AuthMiddleware(http.HandlerFunc(dep.PaymentHandler.CreatePayment)),

@@ -1,92 +1,27 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>收益页 - TripVerse</title>
+  <title>司机收益 - TripVerse</title>
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body data-page="driver">
   <header class="site-header">
     <div class="container nav-shell">
-      <a class="brand" href="index.html"><span class="brand-mark">TV</span><span>TripVerse</span></a>
-      <nav class="nav-links"></nav>
-      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+      <a class="brand" href="index.html" aria-label="TripVerse 首页">
+        <span class="brand-mark">TV</span>
+        <span>TripVerse</span>
+      </a>
+      <nav class="nav-links" aria-label="主导航"></nav>
+      <button class="menu-button" type="button" data-nav-toggle aria-label="打开导航">菜单</button>
     </div>
     <div class="mobile-drawer">
       <div class="container mobile-links"></div>
     </div>
   </header>
-
-  <main class="page">
-    <div class="container">
-      <div class="tab-strip">
-        <a href="driver-dashboard.html">司机首页</a>
-        <a href="driver-publish.html">发布班次</a>
-        <a href="driver-trips.html">班次管理</a>
-        <a href="driver-trip-detail.html">班次详情</a>
-        <a class="is-active" href="driver-income.html">收益页</a>
-        <a href="driver-ai.html">AI 辅助</a>
-      </div>
-
-      <section class="page-hero">
-        <span class="eyebrow">收益页</span>
-        <h1 class="section-title">收益统计、结算明细与路线分析</h1>
-        <p class="muted">页面已接入后端真实统计，展示今日收益、近 7 天收益、退款率和主要收入路线。</p>
-      </section>
-
-      <section class="stat-grid">
-        <article class="stat-card">
-          <div class="stat-label">今日收入</div>
-          <div class="stat-value" data-driver-income-today>--</div>
-          <div class="stat-delta">待结算 <span data-driver-income-pending-settle>--</span></div>
-        </article>
-        <article class="stat-card">
-          <div class="stat-label">本周收入</div>
-          <div class="stat-value" data-driver-income-week>--</div>
-          <div class="stat-delta">近 7 天累计</div>
-        </article>
-        <article class="stat-card">
-          <div class="stat-label">平均客单价</div>
-          <div class="stat-value" data-driver-income-avg-order>--</div>
-          <div class="stat-delta">按已支付订单统计</div>
-        </article>
-        <article class="stat-card">
-          <div class="stat-label">退款率</div>
-          <div class="stat-value" data-driver-income-refund-rate>--</div>
-          <div class="stat-delta">退款申请与处理占比</div>
-        </article>
-      </section>
-
-      <section class="split-grid section-block">
-        <article class="panel">
-          <h2 class="subhead">收入来源</h2>
-          <div class="list-stack section-block" data-driver-income-route-list>
-            <div class="info-card">
-              <strong>正在加载</strong>
-              <p class="muted">正在汇总主要路线收入。</p>
-            </div>
-          </div>
-        </article>
-
-        <aside class="panel">
-          <h2 class="subhead">AI 经营建议</h2>
-          <div class="list-stack section-block" data-driver-income-suggestion-list>
-            <div class="info-card">
-              <strong>正在加载</strong>
-              <p class="muted">正在生成收益建议。</p>
-            </div>
-          </div>
-        </aside>
-      </section>
-    </div>
-  </main>
-
-  <footer class="footer">
-    <div class="container footer-card">收益页现已展示后端真实收益数据，便于司机查看收入结构和近期经营建议。</div>
-  </footer>
-
-  <script src="assets/runtime-config.js?v=20260507-driver-income"></script>
-  <script src="assets/app.js?v=20260507-driver-income"></script>
+  <main class="page"><div class="container"><section class="stat-grid"><div class="stat-card"><div class="stat-label">今日收入</div><div class="stat-value" data-driver-income-today>--</div></div><div class="stat-card"><div class="stat-label">待结算</div><div class="stat-value" data-driver-income-pending-settle>--</div></div><div class="stat-card"><div class="stat-label">本周收入</div><div class="stat-value" data-driver-income-week>--</div></div><div class="stat-card"><div class="stat-label">客单价</div><div class="stat-value" data-driver-income-avg-order>--</div></div></section><section class="dashboard-grid section-block"><article class="panel"><h2 class="subhead">热门路线</h2><div class="list-stack section-block" data-driver-income-route-list></div></article><aside class="panel"><h2 class="subhead">经营建议</h2><div class="mini-chip">退款率 <span data-driver-income-refund-rate>--</span></div><div class="list-stack section-block" data-driver-income-suggestion-list></div></aside></section></div></main>
+  <script src="assets/runtime-config.js?v=20260519-blue-ui"></script>
+  <script src="assets/app.js?v=20260519-blue-ui"></script>
 </body>
 </html>

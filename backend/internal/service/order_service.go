@@ -39,6 +39,8 @@ type OrderService struct {
 	userRepo         repository.UserRepository
 	paymentRepo      repository.PaymentRepository
 	notificationRepo repository.NotificationRepository
+	auditRepo        repository.AuditRepository
+	ticketService    *ElectronicTicketService
 }
 
 func NewOrderService(
@@ -47,6 +49,8 @@ func NewOrderService(
 	userRepo repository.UserRepository,
 	paymentRepo repository.PaymentRepository,
 	notificationRepo repository.NotificationRepository,
+	auditRepo repository.AuditRepository,
+	ticketService *ElectronicTicketService,
 ) *OrderService {
 	return &OrderService{
 		orderRepo:        orderRepo,
@@ -54,6 +58,8 @@ func NewOrderService(
 		userRepo:         userRepo,
 		paymentRepo:      paymentRepo,
 		notificationRepo: notificationRepo,
+		auditRepo:        auditRepo,
+		ticketService:    ticketService,
 	}
 }
 
@@ -341,6 +347,11 @@ func (s *OrderService) ApproveRefundByAdmin(ctx context.Context, currentUserID u
 	if err := s.orderRepo.ApproveRefund(ctx, order, reviewNote); err != nil {
 		return nil, err
 	}
+	if s.ticketService != nil {
+		_ = s.ticketService.VoidByOrderID(ctx, order.ID)
+	}
+	s.createRefundAuditLog(ctx, order.ID, model.RefundStatusRefunded, currentUserID, reviewNote)
+	s.createAuditLog(ctx, currentUserID, currentUserRole, "refund.approve", "order", fmt.Sprintf("%d", order.ID), reviewNote)
 
 	updatedOrder, err := s.orderRepo.GetByID(ctx, orderID)
 	if err != nil {
@@ -384,6 +395,8 @@ func (s *OrderService) RejectRefundByAdmin(ctx context.Context, currentUserID ui
 	if err := s.orderRepo.RejectRefund(ctx, order, reviewNote); err != nil {
 		return nil, err
 	}
+	s.createRefundAuditLog(ctx, order.ID, model.RefundStatusRejected, currentUserID, reviewNote)
+	s.createAuditLog(ctx, currentUserID, currentUserRole, "refund.reject", "order", fmt.Sprintf("%d", order.ID), reviewNote)
 
 	updatedOrder, err := s.orderRepo.GetByID(ctx, orderID)
 	if err != nil {
@@ -401,6 +414,32 @@ func (s *OrderService) RejectRefundByAdmin(ctx context.Context, currentUserID ui
 	)
 
 	return updatedOrder, nil
+}
+
+func (s *OrderService) createRefundAuditLog(ctx context.Context, orderID uint, refundStatus string, reviewerID uint, reviewNote string) {
+	if s.auditRepo == nil {
+		return
+	}
+	_ = s.auditRepo.CreateRefundAuditLog(ctx, &model.RefundAuditLog{
+		OrderID:      orderID,
+		RefundStatus: refundStatus,
+		ReviewNote:   reviewNote,
+		ReviewerID:   reviewerID,
+	})
+}
+
+func (s *OrderService) createAuditLog(ctx context.Context, actorUserID uint, actorRole, action, resourceType, resourceID, detail string) {
+	if s.auditRepo == nil {
+		return
+	}
+	_ = s.auditRepo.CreateAuditLog(ctx, &model.AuditLog{
+		ActorUserID:  actorUserID,
+		ActorRole:    actorRole,
+		Action:       action,
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
+		Detail:       detail,
+	})
 }
 
 func (s *OrderService) createPassengerNotification(ctx context.Context, userID uint, typ, title, content string, relatedOrderID *uint) {

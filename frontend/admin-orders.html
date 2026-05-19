@@ -1,103 +1,27 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>订单管理 - TripVerse</title>
+  <title>订单审核 - TripVerse</title>
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body data-page="admin">
   <header class="site-header">
     <div class="container nav-shell">
-      <a class="brand" href="index.html"><span class="brand-mark">TV</span><span>TripVerse</span></a>
-      <nav class="nav-links">
-        <a data-nav="home" href="index.html">首页</a>
-        <a data-nav="search" href="search.html">购票</a>
-        <a data-nav="orders" href="orders.html">订单</a>
-        <a data-nav="profile" href="profile.html">个人中心</a>
-        <a data-nav="driver" href="driver-dashboard.html">司机端</a>
-        <a data-nav="admin" href="admin-dashboard.html">管理端</a>
-        <a data-nav="ai" href="ai-assistant.html">AI 助手</a>
-      </nav>
-      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+      <a class="brand" href="index.html" aria-label="TripVerse 首页">
+        <span class="brand-mark">TV</span>
+        <span>TripVerse</span>
+      </a>
+      <nav class="nav-links" aria-label="主导航"></nav>
+      <button class="menu-button" type="button" data-nav-toggle aria-label="打开导航">菜单</button>
     </div>
     <div class="mobile-drawer">
-      <div class="container mobile-links">
-        <a data-nav="home" data-nav-close href="index.html">首页</a>
-        <a data-nav="search" data-nav-close href="search.html">购票</a>
-        <a data-nav="orders" data-nav-close href="orders.html">订单</a>
-        <a data-nav="profile" data-nav-close href="profile.html">个人中心</a>
-        <a data-nav="driver" data-nav-close href="driver-dashboard.html">司机端</a>
-        <a data-nav="admin" data-nav-close href="admin-dashboard.html">管理端</a>
-        <a data-nav="ai" data-nav-close href="ai-assistant.html">AI 助手</a>
-      </div>
+      <div class="container mobile-links"></div>
     </div>
   </header>
-
-  <main class="page">
-    <div class="container">
-      <div class="tab-strip">
-        <a href="admin-dashboard.html">后台首页</a>
-        <a href="admin-users.html">用户管理</a>
-        <a class="is-active" href="admin-orders.html">订单管理</a>
-        <a href="admin-tokens.html">Token 管理</a>
-        <a href="admin-risk.html">风险监控</a>
-        <a href="admin-models.html">模型配置</a>
-        <a href="admin-knowledge.html">知识库管理</a>
-        <a href="admin-mcp.html">MCP 工具管理</a>
-      </div>
-
-      <section class="page-hero">
-        <div class="row-between">
-          <div>
-            <span class="eyebrow">订单管理</span>
-            <h1 class="section-title">审核退款申请并查看订单状态</h1>
-            <p class="muted">默认优先显示退款申请中的订单。审核通过后会记录备注和审核时间。</p>
-          </div>
-          <div class="chip-row" data-admin-order-summary>
-            <span class="mini-chip">加载中</span>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="row-between">
-          <div>
-            <h2 class="subhead">筛选条件</h2>
-            <p class="muted">可以只看待审核退款单，也可以查看全部订单。</p>
-          </div>
-        </div>
-        <div class="form-grid section-block" data-admin-order-filter>
-          <div class="field span-4">
-            <label for="admin-refund-status">退款状态</label>
-            <select id="admin-refund-status" name="refundStatus">
-              <option value="requested">待审核退款</option>
-              <option value="">全部订单</option>
-              <option value="refunded">已退款</option>
-              <option value="rejected">已驳回</option>
-              <option value="none">无退款</option>
-            </select>
-          </div>
-          <div class="field span-8">
-            <label for="admin-review-note">审核备注模板</label>
-            <input id="admin-review-note" name="reviewNote" type="text" placeholder="如：用户提交的凭证齐全，允许退款">
-          </div>
-        </div>
-      </section>
-
-      <section class="list-stack" data-admin-order-list>
-        <div class="info-card">
-          <strong>正在加载退款订单</strong>
-          <p class="muted">请稍候...</p>
-        </div>
-      </section>
-    </div>
-  </main>
-
-  <footer class="footer">
-    <div class="container footer-card">管理员订单页已接通真实退款审核接口和审核备注展示。</div>
-  </footer>
-  <script src="assets/runtime-config.js?v=20260506-admin-refund"></script>
-  <script src="assets/app.js?v=20260506-admin-refund"></script>
+  <main class="page"><div class="container"><section class="page-hero"><div class="hero-copy"><span class="eyebrow">管理端 / 订单</span><h1 class="section-title">订单与退款审核</h1><form class="filter-row section-block" data-admin-order-filter><div class="field"><label for="refundStatus">退款状态</label><select id="refundStatus" name="refundStatus"><option value="">全部</option><option value="pending">待审核</option><option value="approved">已通过</option><option value="rejected">已拒绝</option></select></div><div class="field"><label for="reviewNote">审核备注</label><input id="reviewNote" name="reviewNote" value="符合平台规则"></div></form><div class="chip-row" data-admin-order-summary></div></div></section><section class="panel"><div class="list-stack" data-admin-order-list><div class="info-card">正在加载订单</div></div></section></div></main>
+  <script src="assets/runtime-config.js?v=20260519-blue-ui"></script>
+  <script src="assets/app.js?v=20260519-blue-ui"></script>
 </body>
 </html>

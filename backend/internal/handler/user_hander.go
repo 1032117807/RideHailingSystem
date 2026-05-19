@@ -19,21 +19,16 @@ func NewUserHandler(userService *service.UserService) *UserHandler {
 }
 
 type updateProfileRequest struct {
-	Nickname    string `json:"nickname"`
-	Avatar      string `json:"avatar"`
-	Email       string `json:"email"`
-	Gender      string `json:"gender"`
-	Birthday    string `json:"birthday"`
-	DefaultRole string `json:"defaultRole"`
+	Nickname string `json:"nickname"`
+	Avatar   string `json:"avatar"`
+	Email    string `json:"email"`
+	Gender   string `json:"gender"`
+	Birthday string `json:"birthday"`
 }
 
 type verifyRealNameRequest struct {
 	RealName string `json:"realName"`
 	IDCard   string `json:"idCard"`
-}
-
-type switchRoleRequest struct {
-	TargetRole string `json:"targetRole"`
 }
 
 type adminUpdateUserRequest struct {
@@ -77,12 +72,11 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := h.userService.UpdateProfile(r.Context(), currentUser.ID, service.UpdateProfileInput{
-		Nickname:    req.Nickname,
-		Avatar:      req.Avatar,
-		Email:       req.Email,
-		Gender:      req.Gender,
-		Birthday:    birthday,
-		DefaultRole: req.DefaultRole,
+		Nickname: req.Nickname,
+		Avatar:   req.Avatar,
+		Email:    req.Email,
+		Gender:   req.Gender,
+		Birthday: birthday,
 	})
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
@@ -115,25 +109,7 @@ func (h *UserHandler) VerifyRealName(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserHandler) SwitchRole(w http.ResponseWriter, r *http.Request) {
-	currentUser, ok := middleware.CurrentUser(r)
-	if !ok {
-		response.Error(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-
-	var req switchRoleRequest
-	if err := decodeJSONBody(r.Body, &req); err != nil {
-		response.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	user, err := h.userService.SwitchRole(r.Context(), currentUser.ID, req.TargetRole)
-	if err != nil {
-		response.Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	response.Success(w, user)
+	response.Error(w, http.StatusGone, "role switching is disabled; use a separate account for each role")
 }
 
 func (h *UserHandler) GetAccountStatus(w http.ResponseWriter, r *http.Request) {

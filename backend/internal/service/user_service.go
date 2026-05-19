@@ -11,18 +11,16 @@ import (
 )
 
 type UpdateProfileInput struct {
-	Nickname    string
-	Avatar      string
-	Email       string
-	Gender      string
-	Birthday    *time.Time
-	DefaultRole string
+	Nickname string
+	Avatar   string
+	Email    string
+	Gender   string
+	Birthday *time.Time
 }
 
 type AccountStatus struct {
 	Status           string `json:"status"`
 	Role             string `json:"role"`
-	DefaultRole      string `json:"defaultRole"`
 	RealNameVerified bool   `json:"realNameVerified"`
 	CanLogin         bool   `json:"canLogin"`
 }
@@ -49,7 +47,6 @@ type AdminUserItem struct {
 	Phone            string    `json:"phone"`
 	Nickname         string    `json:"nickname"`
 	Role             string    `json:"role"`
-	DefaultRole      string    `json:"defaultRole"`
 	RealName         string    `json:"realName"`
 	RealNameVerified bool      `json:"realNameVerified"`
 	Email            string    `json:"email"`
@@ -106,14 +103,6 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uint, input Upda
 	if input.Birthday != nil {
 		user.Birthday = input.Birthday
 	}
-	if input.DefaultRole != "" {
-		role := normalizeRole(input.DefaultRole)
-		if role != model.RolePassenger && role != model.RoleDriver && role != model.RoleAdmin {
-			return nil, errors.New("invalid default role")
-		}
-		user.DefaultRole = role
-	}
-
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, err
 	}
@@ -146,29 +135,7 @@ func (s *UserService) VerifyRealName(ctx context.Context, userID uint, realName,
 }
 
 func (s *UserService) SwitchRole(ctx context.Context, userID uint, targetRole string) (*model.User, error) {
-	user, err := s.userRepo.GetByID(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	if user == nil {
-		return nil, errors.New("user not found")
-	}
-
-	targetRole = normalizeRole(targetRole)
-	if targetRole != model.RolePassenger && targetRole != model.RoleDriver {
-		return nil, errors.New("targetRole must be passenger or driver")
-	}
-	if user.Status != model.UserStatusActive {
-		return nil, errors.New("account status is not active")
-	}
-
-	user.Role = targetRole
-	user.DefaultRole = targetRole
-
-	if err := s.userRepo.Update(ctx, user); err != nil {
-		return nil, err
-	}
-	return user, nil
+	return nil, errors.New("role switching is disabled; use a separate account for each role")
 }
 
 func (s *UserService) GetAccountStatus(ctx context.Context, userID uint) (*AccountStatus, error) {
@@ -183,7 +150,6 @@ func (s *UserService) GetAccountStatus(ctx context.Context, userID uint) (*Accou
 	return &AccountStatus{
 		Status:           user.Status,
 		Role:             user.Role,
-		DefaultRole:      user.DefaultRole,
 		RealNameVerified: user.RealNameVerified,
 		CanLogin:         user.Status == model.UserStatusActive,
 	}, nil
@@ -305,7 +271,6 @@ func toAdminUserItem(user *model.User) *AdminUserItem {
 		Phone:            user.Phone,
 		Nickname:         user.Nickname,
 		Role:             user.Role,
-		DefaultRole:      user.DefaultRole,
 		RealName:         user.RealName,
 		RealNameVerified: user.RealNameVerified,
 		Email:            user.Email,

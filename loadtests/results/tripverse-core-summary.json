@@ -1,0 +1,241 @@
+{
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {
+            "setup": {
+                "path": "::setup",
+                "id": "5c0f8025f7e0b6654089e5b00e950f1a",
+                "groups": {},
+                "checks": {
+                        "status in 200": {
+                            "name": "status in 200",
+                            "path": "::setup::status in 200",
+                            "id": "e8e159b65f56e9111bb08cc8df6fabf5",
+                            "passes": 4,
+                            "fails": 0
+                        }
+                    },
+                "name": "setup"
+            },
+            "public ticket APIs": {
+                "name": "public ticket APIs",
+                "path": "::public ticket APIs",
+                "id": "9fb708d7fc95535cf24db44170c4ad29",
+                "groups": {},
+                "checks": {
+                        "status in 200": {
+                            "name": "status in 200",
+                            "path": "::public ticket APIs::status in 200",
+                            "id": "1f6b949211663ef9dfe27717e37c97aa",
+                            "passes": 1110,
+                            "fails": 0
+                        },
+                        "status in 200/404": {
+                            "path": "::public ticket APIs::status in 200/404",
+                            "id": "6fb9c006f9c8e7fab9dcf95aaf967dc1",
+                            "passes": 555,
+                            "fails": 0,
+                            "name": "status in 200/404"
+                        }
+                    }
+            },
+            "passenger read APIs": {
+                "id": "ed01418bcd6473916c0328ea31ad65cc",
+                "groups": {},
+                "checks": {
+                        "status in 200": {
+                            "id": "b968cb4a0a535b9634e8ae1825e3dd38",
+                            "passes": 3330,
+                            "fails": 0,
+                            "name": "status in 200",
+                            "path": "::passenger read APIs::status in 200"
+                        }
+                    },
+                "name": "passenger read APIs",
+                "path": "::passenger read APIs"
+            },
+            "driver read APIs": {
+                "groups": {},
+                "checks": {
+                        "status in 200": {
+                            "fails": 0,
+                            "name": "status in 200",
+                            "path": "::driver read APIs::status in 200",
+                            "id": "6a8934cad2756020fac2dcd0e6869a4f",
+                            "passes": 1665
+                        }
+                    },
+                "name": "driver read APIs",
+                "path": "::driver read APIs",
+                "id": "7a4d058b238c37d9ff94a9a8c0e20a63"
+            },
+            "admin read APIs": {
+                "path": "::admin read APIs",
+                "id": "041d850cdf76fa118bbb1fa2336588b2",
+                "groups": {},
+                "checks": {
+                        "status in 200": {
+                            "id": "4487978b223db22ed53633df687a52cb",
+                            "passes": 3885,
+                            "fails": 0,
+                            "name": "status in 200",
+                            "path": "::admin read APIs::status in 200"
+                        }
+                    },
+                "name": "admin read APIs"
+            }
+        },
+        "checks": {}
+    },
+    "metrics": {
+        "http_req_duration": {
+            "avg": 11.56816281164096,
+            "min": 0,
+            "med": 5.0002,
+            "max": 147.0059,
+            "p(90)": 34.00172,
+            "p(95)": 52.00098,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "http_reqs": {
+            "count": 10549,
+            "rate": 174.21088480441733
+        },
+        "http_req_blocked": {
+            "med": 0,
+            "max": 33.9998,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0.01192784150156413,
+            "min": 0
+        },
+        "tripverse_req_duration": {
+            "avg": 11.56816281164096,
+            "min": 0,
+            "med": 5.0002,
+            "max": 147.0059,
+            "p(90)": 34.00172,
+            "p(95)": 52.00098,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "tripverse_req_failed": {
+            "passes": 0,
+            "fails": 10549,
+            "thresholds": {
+                "rate<0.05": false
+            },
+            "value": 0
+        },
+        "http_req_waiting": {
+            "med": 4.9972,
+            "max": 146.0177,
+            "p(90)": 33.50092,
+            "p(95)": 51.48372000000001,
+            "avg": 11.33260031282587,
+            "min": 0
+        },
+        "http_req_tls_handshaking": {
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0
+        },
+        "http_req_connecting": {
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0.0013441558441558438,
+            "min": 0,
+            "med": 0,
+            "max": 1.0579
+        },
+        "iteration_duration": {
+            "min": 1091.4977,
+            "med": 1212.4975,
+            "max": 1661.9978,
+            "p(90)": 1330.31742,
+            "p(95)": 1391.12355,
+            "avg": 1224.243055315315
+        },
+        "checks": {
+            "fails": 0,
+            "passes": 10549,
+            "value": 1
+        },
+        "iterations": {
+            "count": 555,
+            "rate": 9.165517211721644
+        },
+        "http_req_failed": {
+            "passes": 0,
+            "fails": 10549,
+            "thresholds": {
+                "rate<0.05": false
+            },
+            "value": 0
+        },
+        "http_req_duration{expected_response:true}": {
+            "med": 5.0002,
+            "max": 147.0059,
+            "p(90)": 34.00172,
+            "p(95)": 52.00098,
+            "avg": 11.56816281164096,
+            "min": 0
+        },
+        "data_received": {
+            "count": 693128604,
+            "rate": 11446634.504321795
+        },
+        "vus": {
+            "min": 1,
+            "max": 20,
+            "value": 1
+        },
+        "group_duration": {
+            "avg": 55.92333567567578,
+            "min": 5.0024,
+            "med": 20.23285,
+            "max": 481.5009,
+            "p(90)": 173.16971000000007,
+            "p(95)": 201.51481499999971
+        },
+        "vus_max": {
+            "max": 20,
+            "value": 20,
+            "min": 20
+        },
+        "http_req_receiving": {
+            "p(90)": 0.5017,
+            "p(95)": 0.6117000000000009,
+            "avg": 0.211353161437103,
+            "min": 0,
+            "med": 0,
+            "max": 32.5196
+        },
+        "http_req_sending": {
+            "max": 28.3407,
+            "p(90)": 0,
+            "p(95)": 0.052320000000000075,
+            "avg": 0.024209337377950512,
+            "min": 0,
+            "med": 0
+        },
+        "data_sent": {
+            "rate": 72026.61423105648,
+            "count": 4361431
+        }
+    },
+    "setup_data": {
+        "adminToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsInJvbGUiOiJhZG1pbiIsInBob25lIjoiMTg4MDAwMDAwMDAiLCJlbWFpbCI6ImFkbWluX3Jvb3RAdHJpcHZlcnNlLmxvY2FsIiwiaXNzIjoicmlkZWhhaWxpbmctYmFja2VuZCIsInN1YiI6IjEiLCJleHAiOjE3NzkzMDA0MDYsIm5iZiI6MTc3ODY5NTYwNiwiaWF0IjoxNzc4Njk1NjA2fQ.RhK157ZH9xdSW9hoizLFXfCfJV1vHrysOXbSfghtC2g",
+        "driverToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjI1Nywicm9sZSI6ImRyaXZlciIsInBob25lIjoiMTUwMDAwMDAwMDEiLCJlbWFpbCI6ImRyaXZlcjAwMUB0cmlwdmVyc2UubG9jYWwiLCJpc3MiOiJyaWRlaGFpbGluZy1iYWNrZW5kIiwic3ViIjoiMjU3IiwiZXhwIjoxNzc5MzAwNDA2LCJuYmYiOjE3Nzg2OTU2MDYsImlhdCI6MTc3ODY5NTYwNn0.zJI1vttdUXcTW10QGH3-77m3oV1OBwpADGUSOr8I0bk",
+        "passengerToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIsInJvbGUiOiJwYXNzZW5nZXIiLCJwaG9uZSI6IjEzMDAwMDAwMDAxIiwiZW1haWwiOiJwYXNzZW5nZXIwMDFAdHJpcHZlcnNlLmxvY2FsIiwiaXNzIjoicmlkZWhhaWxpbmctYmFja2VuZCIsInN1YiI6IjIiLCJleHAiOjE3NzkzMDA0MDYsIm5iZiI6MTc3ODY5NTYwNiwiaWF0IjoxNzc4Njk1NjA2fQ.UAB94b1g8JRGc0nSCD2kefM3zR5Dw17qHt0yT2Pu7jI",
+        "ticketId": 257
+    }
+}

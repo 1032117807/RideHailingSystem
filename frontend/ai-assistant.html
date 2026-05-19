@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -9,86 +9,19 @@
 <body data-page="ai">
   <header class="site-header">
     <div class="container nav-shell">
-      <a class="brand" href="index.html"><span class="brand-mark">TV</span><span>TripVerse</span></a>
-      <nav class="nav-links">
-        <a data-nav="home" href="index.html">首页</a>
-        <a data-nav="search" href="search.html">购票</a>
-        <a data-nav="ai" href="ai-assistant.html">AI 助手</a>
-        <a data-nav="login" href="login.html">登录</a>
-        <a data-nav="register" href="register.html">注册</a>
-      </nav>
-      <button class="menu-button" type="button" data-nav-toggle>菜单</button>
+      <a class="brand" href="index.html" aria-label="TripVerse 首页">
+        <span class="brand-mark">TV</span>
+        <span>TripVerse</span>
+      </a>
+      <nav class="nav-links" aria-label="主导航"></nav>
+      <button class="menu-button" type="button" data-nav-toggle aria-label="打开导航">菜单</button>
     </div>
     <div class="mobile-drawer">
-      <div class="container mobile-links">
-        <a data-nav="home" data-nav-close href="index.html">首页</a>
-        <a data-nav="search" data-nav-close href="search.html">购票</a>
-        <a data-nav="ai" data-nav-close href="ai-assistant.html">AI 助手</a>
-        <a data-nav="login" data-nav-close href="login.html">登录</a>
-        <a data-nav="register" data-nav-close href="register.html">注册</a>
-      </div>
+      <div class="container mobile-links"></div>
     </div>
   </header>
-
-  <main class="page">
-    <div class="container">
-      <section class="page-hero">
-        <span class="eyebrow">AI 助手</span>
-        <h1 class="section-title">用自然语言查询路线、订单和退款信息</h1>
-        <p class="lede">输入一句话，AI 会结合真实票务、订单和规则数据给你建议。</p>
-      </section>
-
-      <section class="panel">
-        <div class="button-row section-block">
-          <span class="mini-chip">路线查询</span>
-          <span class="mini-chip">订单问答</span>
-          <span class="mini-chip">退款辅助</span>
-          <span class="mini-chip">时间类问题</span>
-        </div>
-
-        <div class="chat-window" data-ai-chat>
-          <div class="message ai">
-            <strong>AI 助手</strong>
-            <div>告诉我你的出发地、目的地、日期，或者直接问订单和退款问题，我会结合真实数据给你建议。</div>
-          </div>
-        </div>
-
-        <form class="section-block" data-ai-form>
-          <div class="field">
-            <label>继续提问</label>
-            <textarea placeholder="例如：帮我查明天杭州到苏州的票；帮我看下我的订单；我这笔订单能退款吗"></textarea>
-          </div>
-          <div class="button-row section-block">
-            <button class="button button-primary" type="submit">发送给 AI</button>
-            <button class="button button-secondary" type="button" data-toast="会话记录已保留在当前页面">保存会话</button>
-          </div>
-        </form>
-      </section>
-
-      <section class="panel section-block">
-        <h2 class="subhead">推荐问法</h2>
-        <div class="list-stack">
-          <div class="info-card">
-            <strong>路线</strong>
-            <p class="muted">帮我查明天杭州到苏州的票</p>
-          </div>
-          <div class="info-card">
-            <strong>订单</strong>
-            <p class="muted">帮我看下我的订单</p>
-          </div>
-          <div class="info-card">
-            <strong>退款</strong>
-            <p class="muted">我这笔订单能退款吗</p>
-          </div>
-        </div>
-      </section>
-    </div>
-  </main>
-
-  <footer class="footer">
-    <div class="container footer-card">乘客 AI 已接入真实业务数据，支持路线、订单、退款和时间类问题的半智能问答。</div>
-  </footer>
-  <script src="assets/runtime-config.js?v=20260501-frontend-link"></script>
-  <script src="assets/app.js?v=20260501-frontend-link"></script>
+  <main class="page"><div class="container chat-layout"><aside class="panel"><span class="eyebrow">AI 出行助手</span><h1 class="section-title">自然语言规划出行</h1><div class="list-stack section-block"><button class="button button-secondary" type="button" data-ai-suggestion="明天早上从杭州到苏州，帮我找最快方案">最快方案</button><button class="button button-secondary" type="button" data-ai-suggestion="今晚去上海虹桥，帮我控制预算">低价方案</button></div></aside><section class="panel"><div class="chat-window" data-ai-chat><div class="message ai"><strong>AI 助手</strong><div>你好，我可以帮你搜索车票、解释退改规则并整理出行方案。</div></div></div><form class="form-grid section-block" data-ai-form><div class="field span-12"><label for="aiText">输入问题</label><textarea id="aiText" name="message">明天早上杭州到苏州有哪些推荐？</textarea></div><button class="button button-primary span-12" type="submit">发送</button></form></section></div></main>
+  <script src="assets/runtime-config.js?v=20260519-blue-ui"></script>
+  <script src="assets/app.js?v=20260519-blue-ui"></script>
 </body>
 </html>
