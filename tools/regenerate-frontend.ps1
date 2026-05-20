@@ -42,8 +42,8 @@ function Header {
 
 function Footer {
 @"
-  <script src="assets/runtime-config.js?v=20260521-ai-workspace"></script>
-  <script src="assets/app.js?v=20260521-ai-workspace"></script>
+  <script src="assets/runtime-config.js?v=20260521-ai-fixed-chat"></script>
+  <script src="assets/app.js?v=20260521-ai-fixed-chat"></script>
 </body>
 </html>
 "@
@@ -94,6 +94,10 @@ body {
   background:
     linear-gradient(180deg, #f8fbff 0%, #eef6ff 42%, #f8fbff 100%);
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+}
+body[data-page="ai"] {
+  height: 100vh;
+  overflow: hidden;
 }
 a { color: inherit; text-decoration: none; }
 button, input, select, textarea { font: inherit; }
@@ -189,8 +193,12 @@ body.nav-open .mobile-drawer { display: block; }
 
 .page { padding: 28px 0 72px; }
 body[data-page="ai"] .page {
-  height: calc(100vh - 88px);
+  height: calc(100vh - 73px);
   padding: 16px 0 20px;
+  overflow: hidden;
+}
+body[data-page="ai"] .container.chat-layout {
+  height: 100%;
   overflow: hidden;
 }
 .page-hero { padding: 22px 0 18px; }
@@ -272,9 +280,7 @@ body[data-page="ai"] .page {
 }
 .chat-layout > .panel:last-child {
   display: grid;
-  grid-template-rows: auto minmax(180px, 1fr) auto;
-  position: sticky;
-  top: 96px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
   max-height: 100%;
   overflow: hidden;
@@ -286,6 +292,7 @@ body[data-page="ai"] .page {
 }
 .ai-chat-panel {
   align-self: stretch;
+  overflow: hidden;
 }
 .chat-window {
   align-content: start;
@@ -475,7 +482,15 @@ tbody tr:hover td { background: #f8fbff; }
 .toast.is-visible { opacity: 1; transform: translateY(0); }
 @media (max-width: 1100px) {
   .hero-grid, .dashboard-grid, .split-grid, .auth-layout, .chat-layout { grid-template-columns: 1fr; }
+  body[data-page="ai"] {
+    height: auto;
+    overflow: auto;
+  }
   body[data-page="ai"] .page {
+    height: auto;
+    overflow: visible;
+  }
+  body[data-page="ai"] .container.chat-layout {
     height: auto;
     overflow: visible;
   }
