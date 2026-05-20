@@ -204,6 +204,21 @@ body.nav-open .mobile-drawer { display: block; }
   display: grid;
   gap: 14px;
 }
+.chat-layout {
+  align-items: start;
+}
+.chat-layout > .panel:last-child {
+  display: grid;
+  grid-template-rows: minmax(0, 560px) auto;
+  max-height: calc(100vh - 150px);
+}
+.chat-window {
+  align-content: start;
+  overflow-y: auto;
+  min-height: 360px;
+  max-height: 560px;
+  padding-right: 8px;
+}
 
 .button {
   min-height: 44px;

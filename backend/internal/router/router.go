@@ -33,6 +33,12 @@ type Dependencies struct {
 func NewRouter(dep Dependencies) http.Handler {
 	mux := http.NewServeMux()
 
+	mount(mux, "/api/health", map[string]http.Handler{
+		http.MethodGet: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			response.Success(w, map[string]string{"status": "ok"})
+		}),
+	})
+
 	mount(mux, "/api/auth/email/send", map[string]http.Handler{
 		http.MethodPost: http.HandlerFunc(dep.AuthHandler.SendEmailCode),
 	})

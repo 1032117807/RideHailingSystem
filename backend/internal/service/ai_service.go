@@ -99,7 +99,12 @@ type AIRouteQuery struct {
 	StartCity     string `json:"startCity"`
 	EndCity       string `json:"endCity"`
 	Date          string `json:"date"`
+	DateFrom      string `json:"dateFrom,omitempty"`
+	DateTo        string `json:"dateTo,omitempty"`
 	AllowTransfer bool   `json:"allowTransfer,omitempty"`
+	MinSeat       int    `json:"minSeat,omitempty"`
+	MaxPriceCent  int    `json:"maxPriceCent,omitempty"`
+	VehicleType   string `json:"vehicleType,omitempty"`
 }
 
 type AITripLeg struct {
@@ -485,7 +490,12 @@ func (s *AIService) executePassengerToolCall(
 			StartCity     string `json:"startCity"`
 			EndCity       string `json:"endCity"`
 			Date          string `json:"date"`
+			DateFrom      string `json:"dateFrom"`
+			DateTo        string `json:"dateTo"`
 			AllowTransfer bool   `json:"allowTransfer"`
+			MinSeat       int    `json:"minSeat"`
+			MaxPriceCent  int    `json:"maxPriceCent"`
+			VehicleType   string `json:"vehicleType"`
 		}
 		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
 			return chatCompletionMessage{}, fmt.Errorf("parse search_tickets arguments failed: %w", err)
@@ -493,18 +503,30 @@ func (s *AIService) executePassengerToolCall(
 
 		args.StartCity = strings.TrimSpace(args.StartCity)
 		args.EndCity = strings.TrimSpace(args.EndCity)
-		args.Date = normalizePassengerSearchDate(strings.TrimSpace(args.Date), lastMessage, now)
+		args.Date = strings.TrimSpace(args.Date)
+		args.DateFrom = strings.TrimSpace(args.DateFrom)
+		args.DateTo = strings.TrimSpace(args.DateTo)
+		args.VehicleType = strings.TrimSpace(args.VehicleType)
+		if args.Date == "" && args.DateFrom == "" && args.DateTo == "" {
+			args.DateFrom, args.DateTo = inferPassengerSearchDateRange(lastMessage, now)
+		}
+		if args.Date != "" {
+			args.Date = normalizePassengerSearchDate(args.Date, lastMessage, now)
+		}
+		args.DateFrom, args.DateTo = normalizePassengerSearchDateRange(args.DateFrom, args.DateTo, lastMessage, now)
 		args.AllowTransfer = true
-		if strings.Contains(lastMessage, "直达") || strings.Contains(lastMessage, "不要中转") {
+		if strings.Contains(lastMessage, "\u76f4\u8fbe") ||
+			strings.Contains(lastMessage, "\u4e0d\u8981\u4e2d\u8f6c") ||
+			strings.Contains(lastMessage, "\u4e0d\u9700\u8981\u4e2d\u8f6c") {
 			args.AllowTransfer = false
 		}
-		log.Printf("passenger ai calling SearchTickets: start=%s end=%s date=%s allowTransfer=%t", args.StartCity, args.EndCity, args.Date, args.AllowTransfer)
+		log.Printf("passenger ai calling SearchTickets: start=%s end=%s date=%s dateFrom=%s dateTo=%s allowTransfer=%t", args.StartCity, args.EndCity, args.Date, args.DateFrom, args.DateTo, args.AllowTransfer)
 
-		dateValue, err := time.ParseInLocation("2006-01-02", args.Date, time.Local)
+		dateValue, dateFromValue, dateToValue, err := parsePassengerSearchDates(args.Date, args.DateFrom, args.DateTo, now)
 		if err != nil {
 			output := mustMarshalToolOutput(map[string]interface{}{
 				"error":   "invalid_date",
-				"message": "date must use YYYY-MM-DD",
+				"message": err.Error(),
 			})
 			return buildToolMessage(call.ID, output), nil
 		}
@@ -513,7 +535,12 @@ func (s *AIService) executePassengerToolCall(
 			StartCity:     args.StartCity,
 			EndCity:       args.EndCity,
 			Date:          dateValue,
+			DateFrom:      dateFromValue,
+			DateTo:        dateToValue,
 			AllowTransfer: args.AllowTransfer,
+			MinSeat:       args.MinSeat,
+			MaxPriceCent:  args.MaxPriceCent,
+			VehicleType:   args.VehicleType,
 		})
 		if err != nil {
 			output := mustMarshalToolOutput(map[string]interface{}{
@@ -528,28 +555,31 @@ func (s *AIService) executePassengerToolCall(
 			StartCity:     args.StartCity,
 			EndCity:       args.EndCity,
 			Date:          args.Date,
+			DateFrom:      args.DateFrom,
+			DateTo:        args.DateTo,
 			AllowTransfer: args.AllowTransfer,
+			MinSeat:       args.MinSeat,
+			MaxPriceCent:  args.MaxPriceCent,
+			VehicleType:   args.VehicleType,
 		}
 		contextData.RouteResults = mapTicketSearchResultsToAITripCards(trips)
-		log.Printf("passenger ai search_tickets result_count=%d start=%s end=%s date=%s allowTransfer=%t",
-			len(trips),
-			args.StartCity,
-			args.EndCity,
-			args.Date,
-			args.AllowTransfer,
-		)
+		log.Printf("passenger ai search_tickets result_count=%d start=%s end=%s date=%s dateFrom=%s dateTo=%s allowTransfer=%t", len(trips), args.StartCity, args.EndCity, args.Date, args.DateFrom, args.DateTo, args.AllowTransfer)
 
 		output := mustMarshalToolOutput(map[string]interface{}{
 			"routeQuery":   contextData.RouteQuery,
 			"routeResults": contextData.RouteResults,
 		})
 		return buildToolMessage(call.ID, output), nil
-
 	case "search_city_tickets":
 		var args struct {
-			City string `json:"city"`
-			Date string `json:"date"`
-			Role string `json:"role"`
+			City         string `json:"city"`
+			Date         string `json:"date"`
+			DateFrom     string `json:"dateFrom"`
+			DateTo       string `json:"dateTo"`
+			Role         string `json:"role"`
+			MinSeat      int    `json:"minSeat"`
+			MaxPriceCent int    `json:"maxPriceCent"`
+			VehicleType  string `json:"vehicleType"`
 		}
 		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
 			return chatCompletionMessage{}, fmt.Errorf("parse search_city_tickets arguments failed: %w", err)
@@ -557,22 +587,37 @@ func (s *AIService) executePassengerToolCall(
 
 		args.City = strings.TrimSpace(args.City)
 		args.Role = strings.TrimSpace(args.Role)
-		args.Date = normalizePassengerSearchDate(strings.TrimSpace(args.Date), lastMessage, now)
-		log.Printf("passenger ai calling SearchCityTickets: city=%s date=%s role=%s", args.City, args.Date, args.Role)
+		args.Date = strings.TrimSpace(args.Date)
+		args.DateFrom = strings.TrimSpace(args.DateFrom)
+		args.DateTo = strings.TrimSpace(args.DateTo)
+		args.VehicleType = strings.TrimSpace(args.VehicleType)
+		if args.Date == "" && args.DateFrom == "" && args.DateTo == "" {
+			args.DateFrom, args.DateTo = inferPassengerSearchDateRange(lastMessage, now)
+		}
+		if args.Date != "" {
+			args.Date = normalizePassengerSearchDate(args.Date, lastMessage, now)
+		}
+		args.DateFrom, args.DateTo = normalizePassengerSearchDateRange(args.DateFrom, args.DateTo, lastMessage, now)
+		log.Printf("passenger ai calling SearchCityTickets: city=%s date=%s dateFrom=%s dateTo=%s role=%s", args.City, args.Date, args.DateFrom, args.DateTo, args.Role)
 
-		dateValue, err := time.ParseInLocation("2006-01-02", args.Date, time.Local)
+		dateValue, dateFromValue, dateToValue, err := parsePassengerSearchDates(args.Date, args.DateFrom, args.DateTo, now)
 		if err != nil {
 			output := mustMarshalToolOutput(map[string]interface{}{
 				"error":   "invalid_date",
-				"message": "date must use YYYY-MM-DD",
+				"message": err.Error(),
 			})
 			return buildToolMessage(call.ID, output), nil
 		}
 
 		trips, err := s.ticketService.SearchCityTickets(ctx, SearchCityTicketsInput{
-			City: args.City,
-			Date: dateValue,
-			Role: args.Role,
+			City:         args.City,
+			Date:         dateValue,
+			DateFrom:     dateFromValue,
+			DateTo:       dateToValue,
+			Role:         args.Role,
+			MinSeat:      args.MinSeat,
+			MaxPriceCent: args.MaxPriceCent,
+			VehicleType:  args.VehicleType,
 		})
 		if err != nil {
 			output := mustMarshalToolOutput(map[string]interface{}{
@@ -584,25 +629,26 @@ func (s *AIService) executePassengerToolCall(
 
 		contextData.Intent = PassengerAIIntentRoute
 		contextData.RouteQuery = &AIRouteQuery{
-			StartCity: args.City,
-			Date:      args.Date,
+			StartCity:    args.City,
+			Date:         args.Date,
+			DateFrom:     args.DateFrom,
+			DateTo:       args.DateTo,
+			MinSeat:      args.MinSeat,
+			MaxPriceCent: args.MaxPriceCent,
+			VehicleType:  args.VehicleType,
 		}
 		contextData.RouteResults = mapTicketSearchResultsToAITripCards(trips)
-		log.Printf("passenger ai search_city_tickets result_count=%d city=%s date=%s role=%s",
-			len(trips),
-			args.City,
-			args.Date,
-			args.Role,
-		)
+		log.Printf("passenger ai search_city_tickets result_count=%d city=%s date=%s dateFrom=%s dateTo=%s role=%s", len(trips), args.City, args.Date, args.DateFrom, args.DateTo, args.Role)
 
 		output := mustMarshalToolOutput(map[string]interface{}{
 			"city":         args.City,
 			"date":         args.Date,
+			"dateFrom":     args.DateFrom,
+			"dateTo":       args.DateTo,
 			"role":         args.Role,
 			"routeResults": contextData.RouteResults,
 		})
 		return buildToolMessage(call.ID, output), nil
-
 	case "list_my_orders":
 		if currentUserID == 0 || currentUserRole == "" {
 			output := mustMarshalToolOutput(map[string]interface{}{
@@ -655,38 +701,28 @@ func (s *AIService) executePassengerToolCall(
 }
 
 func buildPassengerPlannerMessages(messages []AIChatMessage, now time.Time) []chatCompletionMessage {
-	cityToolHint := "When the user asks about one city only, including trips starting there, ending there, or passing through it, call search_city_tickets. When the user gives both start and end cities, call search_tickets and allow transfer by default."
 	result := []chatCompletionMessage{
 		{
 			Role: "system",
 			Content: strings.Join([]string{
-				cityToolHint,
-				"你是一个中文出行票务助手。",
-				"你必须优先使用函数调用来处理用户请求。",
-				"如果用户问路线、票、班次、余票，调用 search_tickets，并默认允许中转。",
-				"如果用户问订单状态、我的订单，调用 list_my_orders。",
-				"如果用户问退款、退票、退费，优先调用 get_refund_rules，必要时再调用 list_my_orders。",
-				"如果不需要外部数据就能回答，请调用 reply_directly。",
-				"不要直接输出普通文本。",
+				"You are a Chinese travel ticket assistant for TripVerse.",
+				"You must call tools for any request about tickets, routes, trips, remaining seats, time ranges, orders, or refund rules.",
+				"For route/ticket search with both start and end cities, call search_tickets. Default allowTransfer=true unless the user explicitly asks for direct only.",
+				"For one-city search, call search_city_tickets.",
+				"Understand time expressions based on today. For all-time phrases such as all dates, every time, no date limit, use dateFrom=today and dateTo=today+30 days. For next-week phrases, use a 7-day range.",
+				"Use date for a single day. Use dateFrom/dateTo for a range. Never collapse a requested time range to only today.",
+				"Extract common filters when mentioned: minSeat, maxPriceCent, vehicleType, direct-only/no-transfer.",
+				"For my orders or order status, call list_my_orders. For refund questions, call get_refund_rules and list_my_orders when needed.",
+				"If no external data is needed, call reply_directly. Do not output plain text without a tool call.",
 			}, "\n"),
 		},
 	}
 
 	for _, item := range messages {
-		result = append(result, chatCompletionMessage{
-			Role:    item.Role,
-			Content: item.Content,
-		})
+		result = append(result, chatCompletionMessage{Role: item.Role, Content: item.Content})
 	}
 
-	if len(result) > 0 {
-		result[0].Content = fmt.Sprintf(
-			"今天是 %s，请基于这个日期理解“今天、明天、后天、今年、某月某日”等时间表达。\n%s",
-			now.Format("2006-01-02"),
-			result[0].Content,
-		)
-	}
-
+	result[0].Content = fmt.Sprintf("Today is %s. Interpret relative dates using this date.\n%s", now.Format("2006-01-02"), result[0].Content)
 	return result
 }
 
@@ -695,60 +731,58 @@ func buildPassengerResponderMessages(messages []AIChatMessage, toolMessages []ch
 		{
 			Role: "system",
 			Content: strings.Join([]string{
-				"你已经拿到了工具执行结果。",
-				"现在不要再调用 search_tickets、list_my_orders、get_refund_rules。",
-				"你必须调用 reply_directly 返回最终答案。",
-				"reply 用简体中文直接回答用户，suggestions 返回简短建议数组。",
-				"回答必须严格基于工具结果，不要编造不存在的数据。",
-				"如果工具结果包含 direct、transfer、suggestion，多给出几个可选路线，并说明推荐理由。",
+				"You already have tool results. Do not call search_tickets, search_city_tickets, list_my_orders, or get_refund_rules again.",
+				"You must call reply_directly for the final answer.",
+				"Reply in Simplified Chinese. Base the answer strictly on tool results and never invent nonexistent trips.",
+				"If results include dateFrom/dateTo, clearly state the searched date range.",
+				"If results include direct, transfer, or suggestion cards, summarize several options and explain why they are useful.",
 			}, "\n"),
 		},
 	}
-
 	for _, item := range messages {
-		result = append(result, chatCompletionMessage{
-			Role:    item.Role,
-			Content: item.Content,
-		})
+		result = append(result, chatCompletionMessage{Role: item.Role, Content: item.Content})
 	}
-
-	if len(result) > 0 {
-		result[0].Content = fmt.Sprintf(
-			"今天是 %s。最终回答里涉及日期、年份时，必须基于这个日期。\n%s",
-			now.Format("2006-01-02"),
-			result[0].Content,
-		)
-	}
-
+	result[0].Content = fmt.Sprintf("Today is %s. Use this date for relative dates in the final answer.\n%s", now.Format("2006-01-02"), result[0].Content)
 	result = append(result, toolMessages...)
 	return result
 }
 
 func passengerPlannerTools() []map[string]interface{} {
+	commonFilters := map[string]interface{}{
+		"date":         map[string]interface{}{"type": "string", "description": "Single departure date, YYYY-MM-DD. Use only for one-day searches."},
+		"dateFrom":     map[string]interface{}{"type": "string", "description": "Start date for range search, YYYY-MM-DD."},
+		"dateTo":       map[string]interface{}{"type": "string", "description": "End date for range search, YYYY-MM-DD. Range is inclusive and max 31 days."},
+		"minSeat":      map[string]interface{}{"type": "integer", "description": "Minimum available seats."},
+		"maxPriceCent": map[string]interface{}{"type": "integer", "description": "Maximum price in cents."},
+		"vehicleType":  map[string]interface{}{"type": "string", "description": "Optional vehicle type keyword."},
+	}
+	searchTicketProps := map[string]interface{}{
+		"startCity":     map[string]interface{}{"type": "string", "description": "Start city or station."},
+		"endCity":       map[string]interface{}{"type": "string", "description": "End city or station."},
+		"allowTransfer": map[string]interface{}{"type": "boolean", "description": "Whether transfer plans are allowed. Default true."},
+	}
+	for key, value := range commonFilters {
+		searchTicketProps[key] = value
+	}
+	cityProps := map[string]interface{}{
+		"city": map[string]interface{}{"type": "string", "description": "City or stop name to search."},
+		"role": map[string]interface{}{"type": "string", "description": "Optional: any, start, end, or stop.", "enum": []string{"any", "start", "end", "stop"}},
+	}
+	for key, value := range commonFilters {
+		cityProps[key] = value
+	}
+
 	return []map[string]interface{}{
 		{
 			"type": "function",
 			"function": map[string]interface{}{
 				"name":        "search_tickets",
-				"description": "按起点、终点和日期搜索可售班次；后端会同时生成直达、中转和模糊路线候选",
+				"description": "Search available trips by start/end, single date or date range, transfer preference, seats, price, and vehicle type. Use this for ticket/route/trip queries.",
 				"parameters": map[string]interface{}{
 					"type":                 "object",
 					"additionalProperties": false,
-					"properties": map[string]interface{}{
-						"startCity": map[string]interface{}{
-							"type":        "string",
-							"description": "起点城市或站点",
-						},
-						"endCity": map[string]interface{}{
-							"type":        "string",
-							"description": "终点城市或站点",
-						},
-						"date": map[string]interface{}{
-							"type":        "string",
-							"description": "出发日期，格式 YYYY-MM-DD",
-						},
-					},
-					"required": []string{"startCity", "endCity", "date"},
+					"properties":           searchTicketProps,
+					"required":             []string{"startCity", "endCity"},
 				},
 			},
 		},
@@ -756,26 +790,12 @@ func passengerPlannerTools() []map[string]interface{} {
 			"type": "function",
 			"function": map[string]interface{}{
 				"name":        "search_city_tickets",
-				"description": "Search trips related to one city. The city can be the trip start, trip end, or any stop/via city.",
+				"description": "Search trips related to one city. The city can be start, end, or stop/via city. Supports date/dateFrom/dateTo and filters.",
 				"parameters": map[string]interface{}{
 					"type":                 "object",
 					"additionalProperties": false,
-					"properties": map[string]interface{}{
-						"city": map[string]interface{}{
-							"type":        "string",
-							"description": "City or stop name to search.",
-						},
-						"date": map[string]interface{}{
-							"type":        "string",
-							"description": "Departure date in YYYY-MM-DD.",
-						},
-						"role": map[string]interface{}{
-							"type":        "string",
-							"description": "Optional: any, start, end, or stop.",
-							"enum":        []string{"any", "start", "end", "stop"},
-						},
-					},
-					"required": []string{"city", "date"},
+					"properties":           cityProps,
+					"required":             []string{"city"},
 				},
 			},
 		},
@@ -783,45 +803,29 @@ func passengerPlannerTools() []map[string]interface{} {
 			"type": "function",
 			"function": map[string]interface{}{
 				"name":        "list_my_orders",
-				"description": "查询当前登录用户的订单列表和状态摘要",
-				"parameters": map[string]interface{}{
-					"type":                 "object",
-					"additionalProperties": false,
-					"properties":           map[string]interface{}{},
-				},
+				"description": "List current user's orders and statuses.",
+				"parameters":  map[string]interface{}{"type": "object", "additionalProperties": false, "properties": map[string]interface{}{}},
 			},
 		},
 		{
 			"type": "function",
 			"function": map[string]interface{}{
 				"name":        "get_refund_rules",
-				"description": "获取平台退款规则摘要",
-				"parameters": map[string]interface{}{
-					"type":                 "object",
-					"additionalProperties": false,
-					"properties":           map[string]interface{}{},
-				},
+				"description": "Get platform refund rules.",
+				"parameters":  map[string]interface{}{"type": "object", "additionalProperties": false, "properties": map[string]interface{}{}},
 			},
 		},
 		{
 			"type": "function",
 			"function": map[string]interface{}{
 				"name":        "reply_directly",
-				"description": "当不需要外部服务时，直接返回最终回答",
+				"description": "Return a final answer when no data lookup is needed.",
 				"parameters": map[string]interface{}{
 					"type":                 "object",
 					"additionalProperties": false,
 					"properties": map[string]interface{}{
-						"reply": map[string]interface{}{
-							"type":        "string",
-							"description": "直接回复用户的自然语言答案",
-						},
-						"suggestions": map[string]interface{}{
-							"type": "array",
-							"items": map[string]interface{}{
-								"type": "string",
-							},
-						},
+						"reply":       map[string]interface{}{"type": "string"},
+						"suggestions": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
 					},
 					"required": []string{"reply", "suggestions"},
 				},
@@ -829,7 +833,6 @@ func passengerPlannerTools() []map[string]interface{} {
 		},
 	}
 }
-
 func passengerReplyTools() []map[string]interface{} {
 	return []map[string]interface{}{
 		{
@@ -1767,6 +1770,73 @@ func normalizePassengerSearchDate(rawDate string, referenceText string, now time
 	}
 
 	return now.Format("2006-01-02")
+}
+
+func inferPassengerSearchDateRange(text string, now time.Time) (string, string) {
+	if containsAny(text,
+		"\u6240\u6709\u65f6\u95f4",
+		"\u5168\u90e8\u65f6\u95f4",
+		"\u6240\u6709\u65f6\u95f4\u70b9",
+		"\u4e0d\u9650\u65e5\u671f",
+		"\u4efb\u610f\u65f6\u95f4",
+	) {
+		return now.Format("2006-01-02"), now.AddDate(0, 0, 30).Format("2006-01-02")
+	}
+	if containsAny(text, "\u672a\u6765\u4e00\u5468", "\u6700\u8fd1\u4e00\u5468", "\u4e00\u5468\u5185") {
+		return now.Format("2006-01-02"), now.AddDate(0, 0, 7).Format("2006-01-02")
+	}
+	if containsAny(text, "\u672a\u6765\u4e09\u5929", "\u4e09\u5929\u5185") {
+		return now.Format("2006-01-02"), now.AddDate(0, 0, 3).Format("2006-01-02")
+	}
+	date := normalizePassengerSearchDate("", text, now)
+	return date, date
+}
+
+func normalizePassengerSearchDateRange(dateFrom, dateTo, referenceText string, now time.Time) (string, string) {
+	dateFrom = strings.TrimSpace(dateFrom)
+	dateTo = strings.TrimSpace(dateTo)
+	if dateFrom == "" && dateTo == "" {
+		return "", ""
+	}
+	if dateFrom == "" {
+		dateFrom = dateTo
+	}
+	if dateTo == "" {
+		dateTo = dateFrom
+	}
+	return normalizePassengerSearchDate(dateFrom, referenceText, now), normalizePassengerSearchDate(dateTo, referenceText, now)
+}
+
+func parsePassengerSearchDates(dateRaw, dateFromRaw, dateToRaw string, now time.Time) (time.Time, time.Time, time.Time, error) {
+	dateRaw = strings.TrimSpace(dateRaw)
+	dateFromRaw = strings.TrimSpace(dateFromRaw)
+	dateToRaw = strings.TrimSpace(dateToRaw)
+	if dateFromRaw != "" || dateToRaw != "" {
+		var dateFrom time.Time
+		var dateTo time.Time
+		var err error
+		if dateFromRaw != "" {
+			dateFrom, err = time.ParseInLocation("2006-01-02", dateFromRaw, now.Location())
+			if err != nil {
+				return time.Time{}, time.Time{}, time.Time{}, errors.New("dateFrom must use YYYY-MM-DD")
+			}
+		}
+		if dateToRaw != "" {
+			dateTo, err = time.ParseInLocation("2006-01-02", dateToRaw, now.Location())
+			if err != nil {
+				return time.Time{}, time.Time{}, time.Time{}, errors.New("dateTo must use YYYY-MM-DD")
+			}
+		}
+		return time.Time{}, dateFrom, dateTo, nil
+	}
+	if dateRaw == "" {
+		dateRaw = now.Format("2006-01-02")
+	}
+	date, err := time.ParseInLocation("2006-01-02", dateRaw, now.Location())
+	if err != nil {
+		return time.Time{}, time.Time{}, time.Time{}, errors.New("date must use YYYY-MM-DD")
+	}
+	return date, time.Time{}, time.Time{}, nil
 }
 
 func containsAny(text string, keywords ...string) bool {

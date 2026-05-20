@@ -4552,7 +4552,7 @@
     const header = routeQuery
       ? `<div class="info-card">
           <strong>查询条件</strong>
-          <p class="muted">${escapeHtml(routeQuery.startCity || "--")} -> ${escapeHtml(routeQuery.endCity || "--")}，${escapeHtml(routeQuery.date || "--")}${routeQuery.allowTransfer ? "，允许一次中转" : ""}</p>
+          <p class="muted">${escapeHtml(routeQuery.startCity || "--")} -> ${escapeHtml(routeQuery.endCity || "--")}，${escapeHtml(routeQuery.date || (routeQuery.dateFrom && routeQuery.dateTo ? `${routeQuery.dateFrom} 至 ${routeQuery.dateTo}` : "--"))}${routeQuery.allowTransfer ? "，允许一次中转" : ""}</p>
         </div>`
       : "";
 
@@ -5068,7 +5068,7 @@
     const header = routeQuery
       ? `<div class="info-card">
           <strong>查询条件</strong>
-          <p class="muted">${escapeHtml(routeQuery.startCity || "--")} -> ${escapeHtml(routeQuery.endCity || "--")}，${escapeHtml(routeQuery.date || "--")}${routeQuery.allowTransfer ? "，允许一次中转" : ""}</p>
+          <p class="muted">${escapeHtml(routeQuery.startCity || "--")} -> ${escapeHtml(routeQuery.endCity || "--")}，${escapeHtml(routeQuery.date || (routeQuery.dateFrom && routeQuery.dateTo ? `${routeQuery.dateFrom} 至 ${routeQuery.dateTo}` : "--"))}${routeQuery.allowTransfer ? "，允许一次中转" : ""}</p>
         </div>`
       : "";
 

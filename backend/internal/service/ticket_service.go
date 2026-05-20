@@ -24,13 +24,23 @@ type SearchTicketsInput struct {
 	StartCity     string
 	EndCity       string
 	Date          time.Time
+	DateFrom      time.Time
+	DateTo        time.Time
 	AllowTransfer bool
+	MinSeat       int
+	MaxPriceCent  int
+	VehicleType   string
 }
 
 type SearchCityTicketsInput struct {
-	City string
-	Date time.Time
-	Role string
+	City         string
+	Date         time.Time
+	DateFrom     time.Time
+	DateTo       time.Time
+	Role         string
+	MinSeat      int
+	MaxPriceCent int
+	VehicleType  string
 }
 
 type TicketSearchLeg struct {
@@ -103,21 +113,22 @@ func (s *TicketService) SearchTickets(ctx context.Context, input SearchTicketsIn
 	if input.StartCity == "" || input.EndCity == "" {
 		return nil, errors.New("startCity and endCity are required")
 	}
-	if input.Date.IsZero() {
-		return nil, errors.New("date is required")
-	}
 	if input.StartCity == input.EndCity {
 		return nil, errors.New("startCity and endCity must be different")
 	}
 
-	dayStart, dayEnd := dayRange(input.Date)
-	allTrips, err := s.tripRepo.ListPublishedTripsByDate(ctx, dayStart, dayEnd)
+	rangeStart, rangeEnd, err := searchTimeRange(input.Date, input.DateFrom, input.DateTo)
+	if err != nil {
+		return nil, err
+	}
+	allTrips, err := s.tripRepo.ListPublishedTripsByDate(ctx, rangeStart, rangeEnd)
 	if err != nil {
 		return nil, err
 	}
 
 	results := buildDirectTicketSearchResults(input.StartCity, input.EndCity, allTrips)
 	if !input.AllowTransfer {
+		results = filterTicketSearchResults(results, input.MinSeat, input.MaxPriceCent, input.VehicleType)
 		sortTicketSearchResults(results)
 		return results, nil
 	}
@@ -128,13 +139,14 @@ func (s *TicketService) SearchTickets(ctx context.Context, input SearchTicketsIn
 			Kind:          "suggestion",
 			StartCity:     input.StartCity,
 			EndCity:       input.EndCity,
-			DepartureTime: dayStart,
-			ArrivalTime:   dayStart,
+			DepartureTime: rangeStart,
+			ArrivalTime:   rangeStart,
 			Suggestions:   suggestions,
 			Status:        model.TripStatusPublished,
 		})
 	}
 
+	results = filterTicketSearchResults(results, input.MinSeat, input.MaxPriceCent, input.VehicleType)
 	sortTicketSearchResults(results)
 	return results, nil
 }
@@ -145,12 +157,11 @@ func (s *TicketService) SearchCityTickets(ctx context.Context, input SearchCityT
 	if input.City == "" {
 		return nil, errors.New("city is required")
 	}
-	if input.Date.IsZero() {
-		return nil, errors.New("date is required")
+	rangeStart, rangeEnd, err := searchTimeRange(input.Date, input.DateFrom, input.DateTo)
+	if err != nil {
+		return nil, err
 	}
-
-	dayStart, dayEnd := dayRange(input.Date)
-	trips, err := s.tripRepo.ListPublishedTripsByDate(ctx, dayStart, dayEnd)
+	trips, err := s.tripRepo.ListPublishedTripsByDate(ctx, rangeStart, rangeEnd)
 	if err != nil {
 		return nil, err
 	}
@@ -168,6 +179,7 @@ func (s *TicketService) SearchCityTickets(ctx context.Context, input SearchCityT
 	}
 
 	sortTicketSearchResults(results)
+	results = filterTicketSearchResults(results, input.MinSeat, input.MaxPriceCent, input.VehicleType)
 	if len(results) > maxCityMatchTrip {
 		results = results[:maxCityMatchTrip]
 	}
@@ -521,11 +533,11 @@ func cityRolesMatch(roles []string, expected string) bool {
 
 func normalizeCitySearchRole(role string) string {
 	switch strings.ToLower(strings.TrimSpace(role)) {
-	case "start", "origin", "起点", "出发":
+	case "start", "origin", "from":
 		return "start"
-	case "end", "destination", "终点", "到达":
+	case "end", "destination", "to":
 		return "end"
-	case "stop", "pass", "via", "经过", "途经", "中间站":
+	case "stop", "pass", "via":
 		return "stop"
 	default:
 		return "any"
@@ -611,6 +623,57 @@ func buildTransferSegmentResultKey(first, second tripSegment) string {
 func dayRange(date time.Time) (time.Time, time.Time) {
 	dayStart := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
 	return dayStart, dayStart.Add(24 * time.Hour)
+}
+
+func searchTimeRange(date, dateFrom, dateTo time.Time) (time.Time, time.Time, error) {
+	if !dateFrom.IsZero() || !dateTo.IsZero() {
+		if dateFrom.IsZero() {
+			dateFrom = dateTo
+		}
+		if dateTo.IsZero() {
+			dateTo = dateFrom
+		}
+		start, _ := dayRange(dateFrom)
+		endStart, _ := dayRange(dateTo)
+		end := endStart.Add(24 * time.Hour)
+		if !end.After(start) {
+			return time.Time{}, time.Time{}, errors.New("dateTo must be greater than or equal to dateFrom")
+		}
+		if end.Sub(start) > 31*24*time.Hour {
+			return time.Time{}, time.Time{}, errors.New("date range cannot exceed 31 days")
+		}
+		return start, end, nil
+	}
+	if date.IsZero() {
+		return time.Time{}, time.Time{}, errors.New("date or dateFrom/dateTo is required")
+	}
+	start, end := dayRange(date)
+	return start, end, nil
+}
+
+func filterTicketSearchResults(results []*TicketSearchResult, minSeat, maxPriceCent int, vehicleType string) []*TicketSearchResult {
+	vehicleType = strings.TrimSpace(vehicleType)
+	if minSeat <= 0 && maxPriceCent <= 0 && vehicleType == "" {
+		return results
+	}
+	filtered := make([]*TicketSearchResult, 0, len(results))
+	for _, item := range results {
+		if item == nil || item.Kind == "suggestion" {
+			filtered = append(filtered, item)
+			continue
+		}
+		if minSeat > 0 && item.SeatAvailable < minSeat {
+			continue
+		}
+		if maxPriceCent > 0 && item.PriceCent > maxPriceCent {
+			continue
+		}
+		if vehicleType != "" && !strings.Contains(strings.ToLower(item.VehicleType), strings.ToLower(vehicleType)) {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
 }
 
 func minInt(a, b int) int {

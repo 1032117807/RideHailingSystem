@@ -231,8 +231,8 @@ CREATE TABLE driver_profiles (
   reviewed_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (id), UNIQUE KEY uk_driver_profiles_user_id (user_id),
-  CONSTRAINT fk_driver_profiles_user FOREIGN KEY (user_id) REFERENCES users(id)
+  PRIMARY KEY (id),
+  UNIQUE KEY idx_driver_profiles_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE vehicles (
