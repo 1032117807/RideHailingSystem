@@ -205,19 +205,28 @@ body.nav-open .mobile-drawer { display: block; }
   gap: 14px;
 }
 .chat-layout {
-  align-items: start;
+  align-items: stretch;
+  min-height: calc(100vh - 132px);
 }
 .chat-layout > .panel:last-child {
   display: grid;
-  grid-template-rows: minmax(0, 560px) auto;
-  max-height: calc(100vh - 150px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  position: sticky;
+  top: 96px;
+  height: calc(100vh - 132px);
+  max-height: calc(100vh - 132px);
+  overflow: hidden;
 }
 .chat-window {
   align-content: start;
   overflow-y: auto;
-  min-height: 360px;
-  max-height: 560px;
+  min-height: 0;
+  max-height: none;
   padding-right: 8px;
+}
+.chat-layout > .panel:last-child .ai-session-shell,
+.chat-layout > .panel:last-child [data-ai-form] {
+  min-width: 0;
 }
 
 .button {
@@ -407,6 +416,16 @@ tbody tr:hover td { background: #f8fbff; }
 .toast.is-visible { opacity: 1; transform: translateY(0); }
 @media (max-width: 1100px) {
   .hero-grid, .dashboard-grid, .split-grid, .auth-layout, .chat-layout { grid-template-columns: 1fr; }
+  .chat-layout { min-height: 0; }
+  .chat-layout > .panel:last-child {
+    position: static;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .chat-window {
+    max-height: 70vh;
+  }
   .card-grid, .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {

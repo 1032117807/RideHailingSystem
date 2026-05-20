@@ -42,8 +42,8 @@ function Header {
 
 function Footer {
 @"
-  <script src="assets/runtime-config.js?v=20260520-ai-range"></script>
-  <script src="assets/app.js?v=20260520-ai-range"></script>
+  <script src="assets/runtime-config.js?v=20260521-ai-range-window"></script>
+  <script src="assets/app.js?v=20260521-ai-range-window"></script>
 </body>
 </html>
 "@

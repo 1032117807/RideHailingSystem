@@ -4042,15 +4042,15 @@
     const raw = String(value || "").trim();
 
     if (!raw) {
-      return "商务у反";
+      return "\u5546\u52a1\u5305\u8f66";
     }
-    if (raw.includes("鎷艰溅")) {
-      return "拼车专线";
+    if (raw.includes("\u62fc\u8f66")) {
+      return "\u62fc\u8f66\u4e13\u7ebf";
     }
-    if (raw.includes("蹇嚎")) {
-      return "鍩庨檯蹇嚎";
+    if (raw.includes("\u5feb\u7ebf")) {
+      return "\u57ce\u9645\u5feb\u7ebf";
     }
-    return "商务у反";
+    return "\u5546\u52a1\u5305\u8f66";
   }
 
   function splitDriverStops(value) {
@@ -4060,7 +4060,7 @@
     }
 
     return raw
-      .split(/[銆侊紝,]/)
+      .split(/[\u3001\uff0c,]/)
       .map((item) => item.trim())
       .filter(Boolean);
   }

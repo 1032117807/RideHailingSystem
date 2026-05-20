@@ -24,7 +24,9 @@ const (
 )
 
 var (
-	monthDayPattern = regexp.MustCompile(`(\d{1,2})月(\d{1,2})[日号]?`)
+	monthDayPattern      = regexp.MustCompile(`(\d{1,2})\s*[\u6708/-]\s*(\d{1,2})\s*[\u65e5\u53f7]?`)
+	isoDateRangePattern  = regexp.MustCompile(`(\d{4}-\d{1,2}-\d{1,2})\s*(?:-|~|\u81f3|\u5230)\s*(\d{4}-\d{1,2}-\d{1,2})`)
+	dateRangeDashPattern = regexp.MustCompile(`(\d{1,2})\s*[\u6708/-]\s*(\d{1,2})\s*[\u65e5\u53f7]?\s*(?:-|~|\u81f3|\u5230)\s*(?:(\d{1,2})\s*[\u6708/-]\s*)?(\d{1,2})\s*[\u65e5\u53f7]?`)
 )
 
 // DriverTripAIDraft 是司机端 AI 产出的结构化班次草稿。
@@ -507,7 +509,10 @@ func (s *AIService) executePassengerToolCall(
 		args.DateFrom = strings.TrimSpace(args.DateFrom)
 		args.DateTo = strings.TrimSpace(args.DateTo)
 		args.VehicleType = strings.TrimSpace(args.VehicleType)
-		if args.Date == "" && args.DateFrom == "" && args.DateTo == "" {
+		if hasPassengerRangeIntent(lastMessage) {
+			args.Date = ""
+			args.DateFrom, args.DateTo = inferPassengerSearchDateRange(lastMessage, now)
+		} else if args.Date == "" && args.DateFrom == "" && args.DateTo == "" {
 			args.DateFrom, args.DateTo = inferPassengerSearchDateRange(lastMessage, now)
 		}
 		if args.Date != "" {
@@ -591,7 +596,10 @@ func (s *AIService) executePassengerToolCall(
 		args.DateFrom = strings.TrimSpace(args.DateFrom)
 		args.DateTo = strings.TrimSpace(args.DateTo)
 		args.VehicleType = strings.TrimSpace(args.VehicleType)
-		if args.Date == "" && args.DateFrom == "" && args.DateTo == "" {
+		if hasPassengerRangeIntent(lastMessage) {
+			args.Date = ""
+			args.DateFrom, args.DateTo = inferPassengerSearchDateRange(lastMessage, now)
+		} else if args.Date == "" && args.DateFrom == "" && args.DateTo == "" {
 			args.DateFrom, args.DateTo = inferPassengerSearchDateRange(lastMessage, now)
 		}
 		if args.Date != "" {
@@ -1745,11 +1753,11 @@ func normalizePassengerSearchDate(rawDate string, referenceText string, now time
 	referenceText = strings.TrimSpace(referenceText)
 
 	switch {
-	case containsAny(referenceText, "后天"):
+	case containsAny(referenceText, "\u540e\u5929"):
 		return now.AddDate(0, 0, 2).Format("2006-01-02")
-	case containsAny(referenceText, "明天", "明早", "明晚"):
+	case containsAny(referenceText, "\u660e\u5929", "\u660e\u65e9", "\u660e\u665a"):
 		return now.AddDate(0, 0, 1).Format("2006-01-02")
-	case containsAny(referenceText, "今天", "今日"):
+	case containsAny(referenceText, "\u4eca\u5929", "\u4eca\u65e5"):
 		return now.Format("2006-01-02")
 	}
 
@@ -1765,14 +1773,52 @@ func normalizePassengerSearchDate(rawDate string, referenceText string, now time
 		return now.Format("2006-01-02")
 	}
 
-	if parsed, err := time.ParseInLocation("2006-01-02", rawDate, now.Location()); err == nil {
-		return parsed.Format("2006-01-02")
+	for _, layout := range []string{"2006-01-02", "2006-1-2"} {
+		if parsed, err := time.ParseInLocation(layout, rawDate, now.Location()); err == nil {
+			return parsed.Format("2006-01-02")
+		}
 	}
 
 	return now.Format("2006-01-02")
 }
 
+func hasPassengerRangeIntent(text string) bool {
+	return containsAny(text,
+		"\u6240\u6709\u65f6\u95f4",
+		"\u5168\u90e8\u65f6\u95f4",
+		"\u6240\u6709\u65f6\u95f4\u70b9",
+		"\u4e0d\u9650\u65e5\u671f",
+		"\u4efb\u610f\u65f6\u95f4",
+		"\u672a\u6765\u4e00\u5468",
+		"\u6700\u8fd1\u4e00\u5468",
+		"\u4e00\u5468\u5185",
+		"\u672a\u6765\u4e09\u5929",
+		"\u4e09\u5929\u5185",
+	) || isoDateRangePattern.MatchString(text) || dateRangeDashPattern.MatchString(text)
+}
+
 func inferPassengerSearchDateRange(text string, now time.Time) (string, string) {
+	if matches := isoDateRangePattern.FindStringSubmatch(text); len(matches) == 3 {
+		dateFrom := normalizePassengerSearchDate(matches[1], "", now)
+		dateTo := normalizePassengerSearchDate(matches[2], "", now)
+		return orderPassengerDateRange(dateFrom, dateTo)
+	}
+	if matches := dateRangeDashPattern.FindStringSubmatch(text); len(matches) == 5 {
+		startMonth, startMonthErr := strconv.Atoi(matches[1])
+		startDay, startDayErr := strconv.Atoi(matches[2])
+		endMonth := startMonth
+		if strings.TrimSpace(matches[3]) != "" {
+			if parsedEndMonth, err := strconv.Atoi(matches[3]); err == nil {
+				endMonth = parsedEndMonth
+			}
+		}
+		endDay, endDayErr := strconv.Atoi(matches[4])
+		if startMonthErr == nil && startDayErr == nil && endDayErr == nil {
+			dateFrom := time.Date(now.Year(), time.Month(startMonth), startDay, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
+			dateTo := time.Date(now.Year(), time.Month(endMonth), endDay, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
+			return orderPassengerDateRange(dateFrom, dateTo)
+		}
+	}
 	if containsAny(text,
 		"\u6240\u6709\u65f6\u95f4",
 		"\u5168\u90e8\u65f6\u95f4",
@@ -1790,6 +1836,13 @@ func inferPassengerSearchDateRange(text string, now time.Time) (string, string) 
 	}
 	date := normalizePassengerSearchDate("", text, now)
 	return date, date
+}
+
+func orderPassengerDateRange(dateFrom, dateTo string) (string, string) {
+	if dateFrom != "" && dateTo != "" && dateFrom > dateTo {
+		return dateTo, dateFrom
+	}
+	return dateFrom, dateTo
 }
 
 func normalizePassengerSearchDateRange(dateFrom, dateTo, referenceText string, now time.Time) (string, string) {
