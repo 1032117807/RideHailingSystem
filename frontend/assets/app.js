@@ -5547,20 +5547,56 @@
       }
     };
 
-    aiForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const value = aiInput.value.trim();
-      if (!value) {
+    const submitAiPrompt = async (value) => {
+      const prompt = String(value || "").trim();
+      if (!prompt) {
         return;
       }
       aiInput.value = "";
       saveAiDraft();
-      await askAi(value);
+      await askAi(prompt);
+    };
+
+    const planForm = document.querySelector("[data-ai-plan-form]");
+    if (planForm) {
+      planForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const formData = new FormData(planForm);
+        const startCity = String(formData.get("startCity") || "").trim();
+        const endCity = String(formData.get("endCity") || "").trim();
+        const dateScope = String(formData.get("dateScope") || "tomorrow");
+        const preference = String(formData.get("preference") || "balanced");
+        if (!startCity || !endCity) {
+          showToast("请填写出发地和目的地");
+          return;
+        }
+
+        const dateText = {
+          today: "今天",
+          tomorrow: "明天",
+          week: "未来一周",
+          all: "所有时间点",
+        }[dateScope] || "明天";
+        const preferenceText = {
+          balanced: "按出发时间、票价和余座给我综合推荐",
+          fast: "优先找最快可达的方案，并说明为什么最快",
+          cheap: "优先找低价方案，并说明票价差异",
+          direct: "只看直达方案，不要中转",
+        }[preference] || "按出发时间、票价和余座给我综合推荐";
+
+        await submitAiPrompt(`查${dateText}${startCity}到${endCity}的车票，${preferenceText}`);
+      });
+    }
+
+    aiForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const value = aiInput.value.trim();
+      await submitAiPrompt(value);
     });
 
     aiInput.addEventListener("input", saveAiDraft);
 
-    aiChat.addEventListener("click", async (event) => {
+    document.addEventListener("click", async (event) => {
       const button = event.target.closest("[data-ai-suggestion]");
       if (!button) {
         return;
@@ -5571,9 +5607,7 @@
         return;
       }
 
-      aiInput.value = value;
-      saveAiDraft();
-      await askAi(value);
+      await submitAiPrompt(value);
     });
 
     sessionTabs.addEventListener("click", (event) => {

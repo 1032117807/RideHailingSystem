@@ -42,8 +42,8 @@ function Header {
 
 function Footer {
 @"
-  <script src="assets/runtime-config.js?v=20260521-ai-range-window"></script>
-  <script src="assets/app.js?v=20260521-ai-range-window"></script>
+  <script src="assets/runtime-config.js?v=20260521-ai-workspace"></script>
+  <script src="assets/app.js?v=20260521-ai-workspace"></script>
 </body>
 </html>
 "@
@@ -188,6 +188,11 @@ img { display: block; max-width: 100%; }
 body.nav-open .mobile-drawer { display: block; }
 
 .page { padding: 28px 0 72px; }
+body[data-page="ai"] .page {
+  height: calc(100vh - 88px);
+  padding: 16px 0 20px;
+  overflow: hidden;
+}
 .page-hero { padding: 22px 0 18px; }
 .section-block { margin-top: var(--space-lg); }
 .hero-grid, .split-grid, .card-grid, .stat-grid, .dashboard-grid, .form-grid, .search-grid, .auth-layout, .chat-layout {
@@ -256,6 +261,43 @@ body.nav-open .mobile-drawer { display: block; }
 .list-stack, .timeline, .search-card, .chat-window, .auth-side, .stack-tight, .detail-copy {
   display: grid;
   gap: 14px;
+}
+.chat-layout {
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
+}
+.chat-layout > .panel {
+  min-height: 0;
+}
+.chat-layout > .panel:last-child {
+  display: grid;
+  grid-template-rows: auto minmax(180px, 1fr) auto;
+  position: sticky;
+  top: 96px;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+.ai-planner-panel {
+  align-self: start;
+  max-height: 100%;
+  overflow-y: auto;
+}
+.ai-chat-panel {
+  align-self: stretch;
+}
+.chat-window {
+  align-content: start;
+  overflow-y: auto;
+  min-height: 0;
+  max-height: none;
+  padding-right: 8px;
+  overscroll-behavior: contain;
+}
+.chat-layout > .panel:last-child .ai-session-shell,
+.chat-layout > .panel:last-child [data-ai-form] {
+  min-width: 0;
 }
 
 .button {
@@ -433,6 +475,20 @@ tbody tr:hover td { background: #f8fbff; }
 .toast.is-visible { opacity: 1; transform: translateY(0); }
 @media (max-width: 1100px) {
   .hero-grid, .dashboard-grid, .split-grid, .auth-layout, .chat-layout { grid-template-columns: 1fr; }
+  body[data-page="ai"] .page {
+    height: auto;
+    overflow: visible;
+  }
+  .chat-layout { min-height: 0; }
+  .chat-layout > .panel:last-child {
+    position: static;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+  .chat-window {
+    max-height: 70vh;
+  }
   .card-grid, .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {
@@ -581,7 +637,7 @@ $pages["register.html"] = @{ Title = "注册"; Page = "register"; Content = @'
 '@ }
 
 $pages["ai-assistant.html"] = @{ Title = "AI 助手"; Page = "ai"; Content = @'
-  <main class="page"><div class="container chat-layout"><aside class="panel"><span class="eyebrow">AI 出行助手</span><h1 class="section-title">自然语言规划出行</h1><div class="list-stack section-block"><button class="button button-secondary" type="button" data-ai-suggestion="明天早上从杭州到苏州，帮我找最快方案">最快方案</button><button class="button button-secondary" type="button" data-ai-suggestion="今晚去上海虹桥，帮我控制预算">低价方案</button></div></aside><section class="panel"><div class="chat-window" data-ai-chat><div class="message ai"><strong>AI 助手</strong><div>你好，我可以帮你搜索车票、解释退改规则并整理出行方案。</div></div></div><form class="form-grid section-block" data-ai-form><div class="field span-12"><label for="aiText">输入问题</label><textarea id="aiText" name="message">明天早上杭州到苏州有哪些推荐？</textarea></div><button class="button button-primary span-12" type="submit">发送</button></form></section></div></main>
+  <main class="page"><div class="container chat-layout"><aside class="panel ai-planner-panel"><span class="eyebrow">AI 出行助手</span><h1 class="section-title">自然语言规划出行</h1><form class="form-grid section-block" data-ai-plan-form><div class="field span-6"><label for="planStart">出发地</label><input id="planStart" name="startCity" value="杭州"></div><div class="field span-6"><label for="planEnd">目的地</label><input id="planEnd" name="endCity" value="上海"></div><div class="field span-6"><label for="planDate">日期</label><select id="planDate" name="dateScope"><option value="today">今天</option><option value="tomorrow">明天</option><option value="week">未来一周</option><option value="all">所有时间</option></select></div><div class="field span-6"><label for="planPreference">偏好</label><select id="planPreference" name="preference"><option value="balanced">综合推荐</option><option value="fast">最快可达</option><option value="cheap">低价优先</option><option value="direct">只看直达</option></select></div><button class="button button-primary span-12" type="submit">生成出行方案</button></form><div class="list-stack section-block"><button class="button button-secondary" type="button" data-ai-suggestion="查所有时间点杭州到上海的车票，并按出发时间列出可售班次">查全量班次</button><button class="button button-secondary" type="button" data-ai-suggestion="帮我查看我的订单，并说明哪些订单可以退款">订单和退款</button></div></aside><section class="panel ai-chat-panel"><div class="chat-window" data-ai-chat><div class="message ai"><strong>AI 助手</strong><div>你好，我可以帮你搜索车票、解释退改规则并整理出行方案。</div></div></div><form class="form-grid section-block" data-ai-form><div class="field span-12"><label for="aiText">输入问题</label><textarea id="aiText" name="message">查所有时间点杭州到上海的车票</textarea></div><button class="button button-primary span-12" type="submit">发送</button></form></section></div></main>
 '@ }
 
 $pages["driver-dashboard.html"] = @{ Title = "司机工作台"; Page = "driver"; Content = @'
