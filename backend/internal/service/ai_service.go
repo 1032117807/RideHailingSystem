@@ -24,9 +24,9 @@ const (
 )
 
 var (
-	monthDayPattern      = regexp.MustCompile(`(\d{1,2})\s*[\u6708/-]\s*(\d{1,2})\s*[\u65e5\u53f7]?`)
-	isoDateRangePattern  = regexp.MustCompile(`(\d{4}-\d{1,2}-\d{1,2})\s*(?:-|~|\u81f3|\u5230)\s*(\d{4}-\d{1,2}-\d{1,2})`)
-	dateRangeDashPattern = regexp.MustCompile(`(\d{1,2})\s*[\u6708/-]\s*(\d{1,2})\s*[\u65e5\u53f7]?\s*(?:-|~|\u81f3|\u5230)\s*(?:(\d{1,2})\s*[\u6708/-]\s*)?(\d{1,2})\s*[\u65e5\u53f7]?`)
+	monthDayPattern      = regexp.MustCompile("(\\d{1,2})\\s*[\u6708/-]\\s*(\\d{1,2})\\s*[\u65e5\u53f7]?")
+	isoDateRangePattern  = regexp.MustCompile("(\\d{4}-\\d{1,2}-\\d{1,2})\\s*(?:-|~|\u81f3|\u5230)\\s*(\\d{4}-\\d{1,2}-\\d{1,2})")
+	dateRangeDashPattern = regexp.MustCompile("(\\d{1,2})\\s*[\u6708/-]\\s*(\\d{1,2})\\s*[\u65e5\u53f7]?\\s*(?:-|~|\u81f3|\u5230)\\s*(?:(\\d{1,2})\\s*[\u6708/-]\\s*)?(\\d{1,2})\\s*[\u65e5\u53f7]?")
 )
 
 // DriverTripAIDraft 是司机端 AI 产出的结构化班次草稿。
