@@ -287,11 +287,11 @@ func (s *AIService) GenerateDriverTripDraft(ctx context.Context, currentUserID u
 	return draft, nil
 }
 
-// ChatPassenger 閲囩敤鐪熸鐨勫伐鍏疯皟鐢ㄦ祦绋嬶細
-// 1. 绗竴杞敱妯″瀷鍐冲畾璋冨摢涓伐鍏凤紝骞剁粰鍑?JSON 鍙傛暟
-// 2. 鍚庣鎵ц鏈湴宸ュ叿锛堟煡绁ㄣ€佹煡璁㈠崟銆佽鍙栭€€娆捐鍒欙級
-// 3. 濡傛灉宸茬粡鍙互鐩存帴鍥炵瓟锛屽垯鐩存帴杩斿洖鍚庣
-// 4. 鍚﹀垯鍐嶈蛋绗簩杞紝璁╂ā鍨嬪熀浜庡伐鍏风粨鏋滆皟鐢?reply_directly 杩斿洖鏈€缁?JSON
+// ChatPassenger runs the tool-calling flow for passenger chat.
+// 1. The first model call decides which local tool to invoke and returns JSON arguments.
+// 2. The backend executes local tools such as ticket search, order lookup, and refund rule lookup.
+// 3. If tool results are enough for a direct answer, the backend returns them immediately.
+// 4. Otherwise, a second model call summarizes tool results through reply_directly JSON.
 func (s *AIService) ChatPassenger(
 	ctx context.Context,
 	currentUserID uint,

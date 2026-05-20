@@ -68,14 +68,12 @@
     passenger: Object.freeze({
       searchTickets: "/tickets/search",
       ticketDetail: "/tickets/:ticketId",
-      orderPreview: "/orders/preview",
       createOrder: "/orders",
       myOrders: "/orders/my",
       orderDetail: "/orders/:orderId",
       orderTicket: "/orders/:orderId/ticket",
       cancelOrder: "/orders/:orderId/cancel",
       refundOrder: "/orders/:orderId/refund",
-      rescheduleOrder: "/orders/:orderId/reschedule",
       createPayment: "/payments/create",
       paymentStatus: "/payments/:paymentId/status",
       mockPaymentSuccess: "/payments/:paymentId/mock-success",
@@ -85,8 +83,8 @@
       dashboard: "/driver/dashboard",
       trips: "/driver/trips",
       tripDetail: "/driver/trips/:tripId",
-      closeTrip: "/driver/trips/:tripId/close",
       income: "/driver/income",
+      verifyOrder: "/driver/orders/:orderId/verify",
       verifyTicket: "/driver/tickets/verify",
       aiCreateTrip: "/ai/driver/create-trip",
     }),
@@ -98,18 +96,14 @@
       orders: "/admin/orders",
       approveRefund: "/admin/orders/:orderId/refund/approve",
       rejectRefund: "/admin/orders/:orderId/refund/reject",
-      permissions: "/admin/permissions",
       tokens: "/admin/tokens",
       riskLogs: "/admin/risk/logs",
       riskLogDetail: "/admin/risk/logs/:eventId",
-      models: "/admin/models",
       knowledge: "/admin/knowledge",
       knowledgeUpload: "/admin/knowledge/upload",
       knowledgeSearch: "/admin/knowledge/search",
       knowledgeDetail: "/admin/knowledge/:documentId",
       knowledgeReindex: "/admin/knowledge/:documentId/reindex",
-      mcpTools: "/admin/mcp/tools",
-      reports: "/admin/reports",
     }),
     notification: Object.freeze({
       my: "/notifications/my",
@@ -149,7 +143,14 @@
     ],
     admin: [
       { key: "home", label: "首页", href: ROUTES.home },
-      { key: "admin", label: "管理端", href: ROUTES.admin.dashboard },
+      { key: "admin-dashboard", label: "工作台", href: ROUTES.admin.dashboard },
+      { key: "admin-users", label: "用户管理", href: ROUTES.admin.users },
+      { key: "admin-orders", label: "订单审核", href: ROUTES.admin.orders },
+      { key: "admin-tokens", label: "Token 配额", href: ROUTES.admin.tokens },
+      { key: "admin-risk", label: "风控日志", href: ROUTES.admin.risk },
+      { key: "admin-knowledge", label: "知识库", href: ROUTES.admin.knowledge },
+      { key: "admin-models", label: "模型治理", href: ROUTES.admin.models },
+      { key: "admin-mcp", label: "MCP 工具", href: ROUTES.admin.mcp },
       { key: "profile", label: "个人中心", href: ROUTES.passenger.profile },
       { key: "ai", label: "AI 助手", href: ROUTES.passenger.aiAssistant },
     ],
@@ -633,6 +634,43 @@
 
   TripVerse.showToast = showToast;
 
+  function friendlyErrorMessage(error, fallback) {
+    if (!window.navigator.onLine) {
+      return "网络已断开，请检查网络连接";
+    }
+
+    const status = Number(error?.status || 0);
+    const rawMessage = String(error?.message || error?.payload?.message || "").trim();
+    const lowerMessage = rawMessage.toLowerCase();
+
+    if (lowerMessage.includes("invalid phone or password")) {
+      return "用户不存在或密码错误";
+    }
+    if (lowerMessage.includes("invalid email or code")) {
+      return "用户不存在或验证码错误";
+    }
+    if (lowerMessage.includes("user not found")) {
+      return "用户不存在";
+    }
+    if (lowerMessage.includes("password")) {
+      return "密码错误";
+    }
+    if (lowerMessage.includes("code")) {
+      return "验证码错误";
+    }
+    if (status === 400 || status === 401 || status === 403) {
+      return rawMessage || fallback || "账号或密码错误";
+    }
+    if (status >= 500) {
+      return "服务器异常，请稍后再试";
+    }
+    if (error?.name === "AbortError" || lowerMessage.includes("failed to fetch")) {
+      return "服务器连接失败，请稍后再试";
+    }
+
+    return rawMessage || fallback || "操作失败，请稍后再试";
+  }
+
   function renderNavigation() {
     const auth = readAuth();
     const role = auth?.role || "guest";
@@ -642,7 +680,7 @@
     function renderItems(includeAuthMeta, isMobile) {
       const itemHtml = items
         .map((item) => {
-          const activeClass = item.key === pageId ? "is-active" : "";
+          const activeClass = item.href === getCurrentFileName() || item.key === pageId ? "is-active" : "";
           const closeAttr = isMobile ? " data-nav-close" : "";
           return `<a class="${activeClass}" data-nav="${item.key}"${closeAttr} href="${item.href}">${item.label}</a>`;
         })
@@ -695,7 +733,7 @@
           // Ignore mock or network failures during local demo logout.
         }
         clearAuth();
-        showToast("宸查€€鍑虹櫥褰?");
+        showToast("已退出登录");
         window.setTimeout(() => redirectTo(ROUTES.auth.login), 300);
       });
     });
@@ -704,7 +742,7 @@
   function initToastTriggers() {
     document.querySelectorAll("[data-toast]").forEach((button) => {
       button.addEventListener("click", () => {
-        showToast(button.dataset.toast || "宸插鐞?");
+        showToast(button.dataset.toast || "已处理");
       });
     });
   }
@@ -816,119 +854,6 @@
   // Legacy phone-code auth flow removed. Keep a no-op stub to avoid accidental reuse.
   function deprecatedLegacyAuthForms() {
     return;
-    const authForm = document.querySelector("[data-auth-form]");
-    if (!authForm) {
-      return;
-    }
-
-    const modeSelect = authForm.querySelector("[name='loginMode']");
-    const passwordGroup = authForm.querySelector("[data-password-group]");
-    const codeGroup = authForm.querySelector("[data-code-group]");
-
-    function syncLoginMode() {
-      if (!modeSelect || !passwordGroup || !codeGroup) {
-        return;
-      }
-      const mode = modeSelect.value;
-      passwordGroup.style.display = mode === "password" ? "grid" : "none";
-      codeGroup.style.display = mode === "code" ? "grid" : "none";
-    }
-
-    if (modeSelect) {
-      modeSelect.addEventListener("change", syncLoginMode);
-      syncLoginMode();
-    }
-
-    authForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-
-      const formData = new window.FormData(authForm);
-      const formType = authForm.dataset.authForm;
-      const role = formData.get("role") || "passenger";
-      const phone = String(formData.get("phone") || "").trim();
-      const nickname = String(formData.get("nickname") || "").trim();
-      const password = String(formData.get("password") || "").trim();
-      const emailCode = String(formData.get("emailCode") || "").trim();
-      const loginMode = String(formData.get("loginMode") || "password");
-
-      if (!phone) {
-        showToast("璇峰厛濉啓鎵嬫満鍙?");
-        return;
-      }
-
-      if (formType === "register") {
-        if (!emailCode || !password) {
-          showToast("璇疯ˉ鍏ㄩ獙璇佺爜鍜屽瘑鐮?");
-          return;
-        }
-
-        await api.post(API_ENDPOINTS.auth.register, {
-          role,
-          phone,
-          emailCode,
-          password,
-          nickname,
-        });
-
-        saveAuth({
-          token: `mock-token-${Date.now()}`,
-          role,
-          phone,
-          nickname: nickname || (role === "driver" ? "新司机" : "新乘客"),
-          status: "active",
-        });
-
-        showToast("娉ㄥ唽鎴愬姛锛屽凡鑷姩鐧诲綍");
-        window.setTimeout(() => redirectTo(getRoleHome(role)), 300);
-        return;
-      }
-
-      if (loginMode === "password" && !password) {
-        showToast("璇峰～鍐欏瘑鐮?");
-        return;
-      }
-
-      if (loginMode === "code" && !emailCode) {
-        showToast("璇峰～鍐欓獙璇佺爜");
-        return;
-      }
-
-      await api.post(
-        loginMode === "password" ? API_ENDPOINTS.auth.loginByPassword : API_ENDPOINTS.auth.loginByCode,
-        loginMode === "password"
-          ? { role, phone, password }
-          : { role, phone, emailCode }
-      );
-
-      saveAuth({
-        token: `mock-token-${Date.now()}`,
-        role,
-        phone,
-        nickname: role === "driver" ? "李师傅" : "张明",
-        status: "active",
-      });
-
-      showToast("鐧诲綍鎴愬姛");
-      window.setTimeout(() => redirectTo(getRoleHome(role)), 300);
-    });
-
-    document.querySelectorAll("[data-send-code]").forEach((button) => {
-      button.addEventListener("click", async () => {
-        const phoneInput = authForm.querySelector("[name='phone']");
-        const phone = String(phoneInput?.value || "").trim();
-        if (!phone) {
-          showToast("璇峰厛杈撳叆鎵嬫満鍙?");
-          return;
-        }
-
-        await api.post(API_ENDPOINTS.auth.sendEmailCode, {
-          phone,
-          scene: authForm.dataset.authForm === "register" ? "register" : "login",
-        });
-
-        showToast("楠岃瘉鐮佸凡鍙戦€?");
-      });
-    });
   }
 
   function renderProfileAccountModule() {
@@ -987,37 +912,83 @@
       const loginMode = String(formData.get("loginMode") || "password");
 
       if (formType === "register" && !phone) {
-        showToast("璇疯緭鍏ユ墜鏈哄彿");
+        showToast("请输入手机号");
         return;
       }
 
       if ((formType === "register" || loginMode === "code") && !email) {
-        showToast("璇疯緭鍏ラ偖绠?");
+        showToast("请输入邮箱");
         return;
       }
 
       if (loginMode === "password" && !phone) {
-        showToast("璇疯緭鍏ユ墜鏈哄彿");
+        showToast("请输入手机号");
         return;
       }
 
-      if (formType === "register") {
-        if (!emailCode || !password) {
-          showToast("璇疯ˉ鍏ㄩ偖绠遍獙璇佺爜鍜屽瘑鐮?");
+      if (loginMode === "password" && !password) {
+        showToast("请填写密码");
+        return;
+      }
+
+      if (loginMode === "code" && !emailCode) {
+        showToast("请填写邮箱验证码");
+        return;
+      }
+
+      try {
+        if (formType === "register") {
+          if (!emailCode || !password) {
+            showToast("请补全邮箱验证码和密码");
+            return;
+          }
+
+          const registerResponse = await api.post("/auth/register", {
+            role,
+            phone,
+            email,
+            emailCode,
+            password,
+            nickname,
+          });
+
+          const registerData = registerResponse?.data || {};
+          const registerUser = registerData.user || {};
+
+          saveAuth(
+            runtimeConfig.useMock
+              ? {
+                  token: `mock-token-${Date.now()}`,
+                  role,
+                  phone,
+                  email,
+                  nickname: nickname || (role === "driver" ? "新司机" : "新乘客"),
+                  status: "active",
+                }
+              : {
+                  token: registerData.token || "",
+                  role: registerUser.role || role,
+                  phone: registerUser.phone || phone,
+                  email: registerUser.email || email,
+                  nickname: registerUser.nickname || nickname || (role === "driver" ? "新司机" : "新乘客"),
+                  status: registerUser.status || "active",
+                }
+          );
+
+          showToast("注册成功，已自动登录");
+          window.setTimeout(() => redirectTo(getRoleHome(role)), 300);
           return;
         }
 
-        const registerResponse = await api.post("/auth/register", {
-          role,
-          phone,
-          email,
-          emailCode,
-          password,
-          nickname,
-        });
+        const loginResponse = await api.post(
+          loginMode === "password" ? "/auth/login/password" : "/auth/login/code",
+          loginMode === "password"
+            ? { role, phone, password }
+            : { role, email, emailCode }
+        );
 
-        const registerData = registerResponse?.data || {};
-        const registerUser = registerData.user || {};
+        const loginData = loginResponse?.data || {};
+        const loginUser = loginData.user || {};
 
         saveAuth(
           runtimeConfig.useMock
@@ -1026,66 +997,24 @@
                 role,
                 phone,
                 email,
-                nickname: nickname || (role === "driver" ? "新司机" : "新乘客"),
+                nickname: role === "driver" ? "李师傅" : "张明",
                 status: "active",
               }
             : {
-                token: registerData.token || "",
-                role: registerUser.role || role,
-                phone: registerUser.phone || phone,
-                email: registerUser.email || email,
-                nickname: registerUser.nickname || nickname || (role === "driver" ? "新司机" : "新乘客"),
-                status: registerUser.status || "active",
+                token: loginData.token || "",
+                role: loginUser.role || role,
+                phone: loginUser.phone || phone,
+                email: loginUser.email || email,
+                nickname: loginUser.nickname || (role === "driver" ? "李师傅" : "张明"),
+                status: loginUser.status || "active",
               }
         );
 
-        showToast("娉ㄥ唽鎴愬姛锛屽凡鑷姩鐧诲綍");
+        showToast("登录成功");
         window.setTimeout(() => redirectTo(getRoleHome(role)), 300);
-        return;
+      } catch (error) {
+        showToast(friendlyErrorMessage(error, formType === "register" ? "注册失败" : "登录失败"));
       }
-
-      if (loginMode === "password" && !password) {
-        showToast("璇峰～鍐欏瘑鐮?");
-        return;
-      }
-
-      if (loginMode === "code" && !emailCode) {
-        showToast("璇峰～鍐欓偖绠遍獙璇佺爜");
-        return;
-      }
-
-      const loginResponse = await api.post(
-        loginMode === "password" ? "/auth/login/password" : "/auth/login/code",
-        loginMode === "password"
-          ? { role, phone, password }
-          : { role, email, emailCode }
-      );
-
-      const loginData = loginResponse?.data || {};
-      const loginUser = loginData.user || {};
-
-      saveAuth(
-        runtimeConfig.useMock
-          ? {
-              token: `mock-token-${Date.now()}`,
-              role,
-              phone,
-              email,
-              nickname: role === "driver" ? "李师傅" : "张明",
-              status: "active",
-            }
-          : {
-              token: loginData.token || "",
-              role: loginUser.role || role,
-              phone: loginUser.phone || phone,
-              email: loginUser.email || email,
-              nickname: loginUser.nickname || (role === "driver" ? "李师傅" : "张明"),
-              status: loginUser.status || "active",
-            }
-      );
-
-      showToast("鐧诲綍鎴愬姛");
-      window.setTimeout(() => redirectTo(getRoleHome(role)), 300);
     });
 
     document.querySelectorAll("[data-send-code]").forEach((button) => {
@@ -1093,16 +1022,20 @@
         const emailInput = authForm.querySelector("[name='email']");
         const email = String(emailInput?.value || "").trim();
         if (!email) {
-          showToast("璇峰厛杈撳叆閭");
+          showToast("请先输入邮箱");
           return;
         }
 
-        await api.post(API_ENDPOINTS.auth.sendEmailCode, {
-          email,
-          scene: authForm.dataset.authForm === "register" ? "register" : "login",
-        });
+        try {
+          await api.post(API_ENDPOINTS.auth.sendEmailCode, {
+            email,
+            scene: authForm.dataset.authForm === "register" ? "register" : "login",
+          });
 
-        showToast("楠岃瘉鐮佸凡鍙戦€佸埌閭");
+          showToast("验证码已发送到邮箱");
+        } catch (error) {
+          showToast(friendlyErrorMessage(error, "验证码发送失败"));
+        }
       });
     });
   }
@@ -1129,12 +1062,12 @@
           const sold = Math.max((trip.seatTotal || 0) - (trip.seatAvailable || 0), 0);
           return `
             <tr>
-              <td>${escapeHtml(trip.startCity)} 鈫?${escapeHtml(trip.endCity)}</td>
+              <td>${escapeHtml(trip.startCity)} → ${escapeHtml(trip.endCity)}</td>
               <td>${escapeHtml(formatShortDateTime(trip.departureTime))}</td>
               <td>${sold} / ${trip.seatTotal || 0}</td>
               <td>${escapeHtml(formatPriceCent(trip.priceCent))}</td>
               <td>${escapeHtml(mapTripStatus(trip.status))}</td>
-              <td><a href="${ROUTES.driver.tripDetail}?tripId=${trip.id}">鏌ョ湅璇︽儏</a></td>
+              <td><a href="${ROUTES.driver.tripDetail}?tripId=${trip.id}">查看详情</a></td>
             </tr>
           `;
         }).join("");
@@ -1160,7 +1093,7 @@
       const wrapper = document.createElement("div");
       wrapper.className = "field span-6";
       wrapper.innerHTML = `
-        <label>鍒拌揪鏃堕棿</label>
+        <label>到达时间</label>
         <input name="arrival" type="datetime-local">
       `;
       departInput.closest(".field")?.insertAdjacentElement("afterend", wrapper);
@@ -1228,7 +1161,7 @@
       const wrapper = document.createElement("div");
       wrapper.className = "field span-6";
       wrapper.innerHTML = `
-        <label>鍒拌揪鏃堕棿</label>
+        <label>到达时间</label>
         <input name="arrival" type="datetime-local">
       `;
       departInput.closest(".field")?.insertAdjacentElement("afterend", wrapper);
@@ -1248,23 +1181,23 @@
       const stopsRaw = String(form.querySelector("[name='stops']")?.value || "").trim();
 
       if (!departureTime) {
-        showToast("璇烽€夋嫨鍑哄彂鏃堕棿");
+        showToast("请选择出发时间");
         return;
       }
       if (!startCity || !endCity) {
-        showToast("璇峰～鍐欒捣鐐瑰拰缁堢偣");
+        showToast("请～写起点和终点");
         return;
       }
       if (startCity === endCity) {
-        showToast("璧风偣鍜岀粓鐐逛笉鑳界浉鍚?");
+        showToast("起点和终点不能相同");
         return;
       }
       if (seatTotal <= 0) {
-        showToast("鎬诲骇浣嶆暟蹇呴』澶т簬 0");
+        showToast("总座位数必须大于 0");
         return;
       }
       if (priceCent <= 0) {
-        showToast("绁ㄤ环蹇呴』澶т簬 0");
+        showToast("票价必须大于 0");
         return;
       }
 
@@ -1283,7 +1216,7 @@
 
       try {
         submitButton.disabled = true;
-        submitButton.textContent = "鎻愪氦涓?..";
+        submitButton.textContent = "提交?..";
 
         const result = await api.post(API_ENDPOINTS.driver.trips, {
           vehicleType,
@@ -1297,7 +1230,7 @@
         });
 
         const trip = result?.data;
-        showToast("鐝鍒涘缓鎴愬姛");
+        showToast("班次创建成功");
         window.setTimeout(() => {
           if (trip?.id) {
             redirectTo(`${ROUTES.driver.tripDetail}?tripId=${trip.id}`);
@@ -1306,10 +1239,10 @@
           }
         }, 300);
       } catch (error) {
-        showToast(error.message || "鍒涘缓鐝澶辫触");
+        showToast(error.message || "创建班次失败");
       } finally {
         submitButton.disabled = false;
-        submitButton.textContent = "鎻愪氦鍙戝竷";
+        submitButton.textContent = "提交发布";
       }
     });
   }
@@ -1330,7 +1263,7 @@
       const wrapper = document.createElement("div");
       wrapper.className = "field span-6";
       wrapper.innerHTML = `
-        <label>鍒拌揪鏃堕棿</label>
+        <label>到达时间</label>
         <input name="arrival" type="datetime-local">
       `;
       departInput.closest(".field")?.insertAdjacentElement("afterend", wrapper);
@@ -1350,23 +1283,23 @@
       const stopsRaw = String(form.querySelector("[name='stops']")?.value || "").trim();
 
       if (!departureTime) {
-        showToast("璇烽€夋嫨鍑哄彂鏃堕棿");
+        showToast("请选择出发时间");
         return;
       }
       if (!startCity || !endCity) {
-        showToast("璇峰～鍐欒捣鐐瑰拰缁堢偣");
+        showToast("请～写起点和终点");
         return;
       }
       if (startCity === endCity) {
-        showToast("璧风偣鍜岀粓鐐逛笉鑳界浉鍚?");
+        showToast("起点和终点不能相同");
         return;
       }
       if (seatTotal <= 0) {
-        showToast("鎬诲骇浣嶆暟蹇呴』澶т簬 0");
+        showToast("总座位数必须大于 0");
         return;
       }
       if (priceCent <= 0) {
-        showToast("绁ㄤ环蹇呴』澶т簬 0");
+        showToast("票价必须大于 0");
         return;
       }
 
@@ -1375,15 +1308,15 @@
         ? new Date(arrivalValue)
         : new Date(new Date(departureTime).getTime() + 2 * 60 * 60 * 1000 + 15 * 60 * 1000);
       if (Number.isNaN(departureDate.getTime())) {
-        showToast("鍑哄彂鏃堕棿鏍煎紡涓嶆纭?");
+        showToast("出发时间格式不正?");
         return;
       }
       if (Number.isNaN(arrivalDate.getTime())) {
-        showToast("鍒拌揪鏃堕棿鏍煎紡涓嶆纭?");
+        showToast("到达时间格式不正?");
         return;
       }
       if (arrivalDate.getTime() <= departureDate.getTime()) {
-        showToast("鍒拌揪鏃堕棿蹇呴』鏅氫簬鍑哄彂鏃堕棿");
+        showToast("到达时间必须晚于出发时间");
         return;
       }
 
@@ -1396,14 +1329,14 @@
 
       const duplicateEndpointStop = stops.find((item) => item.stopName === startCity || item.stopName === endCity);
       if (duplicateEndpointStop) {
-        showToast("閫旂粡绔欑偣涓嶈兘鍜岃捣鐐规垨缁堢偣閲嶅");
+        showToast("途经站点不能和起点或终点重复");
         return;
       }
 
       const stopNameSet = new Set();
       for (const stop of stops) {
         if (stopNameSet.has(stop.stopName)) {
-          showToast("閫旂粡绔欑偣涓嶈兘閲嶅");
+          showToast("途经站点不能重复");
           return;
         }
         stopNameSet.add(stop.stopName);
@@ -1411,7 +1344,7 @@
 
       try {
         submitButton.disabled = true;
-        submitButton.textContent = "鎻愪氦涓?..";
+        submitButton.textContent = "提交?..";
 
         const result = await api.post(API_ENDPOINTS.driver.trips, {
           vehicleType,
@@ -1425,7 +1358,7 @@
         });
 
         const trip = result?.data;
-        showToast("鐝鍒涘缓鎴愬姛");
+        showToast("班次创建成功");
         window.setTimeout(() => {
           if (trip?.id) {
             redirectTo(`${ROUTES.driver.tripDetail}?tripId=${trip.id}`);
@@ -1434,10 +1367,10 @@
           }
         }, 300);
       } catch (error) {
-        showToast(error.message || "鍒涘缓鐝澶辫触");
+        showToast(error.message || "创建班次失败");
       } finally {
         submitButton.disabled = false;
-        submitButton.textContent = "鎻愪氦鍙戝竷";
+        submitButton.textContent = "提交发布";
       }
     });
   }
@@ -1467,7 +1400,7 @@
         }
 
         if (title) {
-          title.textContent = `${trip.startCity} 鈫?${trip.endCity}`;
+          title.textContent = `${trip.startCity} → ${trip.endCity}`;
         }
 
         if (chips) {
@@ -1475,14 +1408,14 @@
           const occupancy = trip.seatTotal ? Math.round((sold / trip.seatTotal) * 100) : 0;
           chips.innerHTML = `
             <span class="mini-chip">${escapeHtml(mapTripStatus(trip.status))}</span>
-            <span class="mini-chip">涓婂骇鐜?${occupancy}%</span>
+            <span class="mini-chip">上座?${occupancy}%</span>
           `;
         }
 
         if (timeBox) {
           timeBox.innerHTML = `
             <span>${escapeHtml(formatFullDateTime(trip.departureTime))}</span>
-            <span>棰勮鍒拌揪 ${escapeHtml(formatFullDateTime(trip.arrivalTime))}</span>
+            <span>预计到达 ${escapeHtml(formatFullDateTime(trip.arrivalTime))}</span>
           `;
         }
 
@@ -1497,7 +1430,7 @@
           const sold = Math.max((trip.seatTotal || 0) - (trip.seatAvailable || 0), 0);
           seatInfoBox.innerHTML = `
             <span>${escapeHtml(formatPriceCent(trip.priceCent))}</span>
-            <span>${trip.seatTotal || 0} 搴?/ 宸插敭 ${sold}</span>
+            <span>${trip.seatTotal || 0} 座 / 已售 ${sold}</span>
           `;
         }
       })
@@ -1711,7 +1644,7 @@
         }
 
         if (title) {
-          title.textContent = `${trip.startCity} 鈫?${trip.endCity}`;
+          title.textContent = `${trip.startCity} → ${trip.endCity}`;
         }
 
         if (routeBox) {
@@ -1762,681 +1695,23 @@
   }
 
   function initCheckoutPage() {
-    if (getCurrentFileName() !== ROUTES.passenger.checkout) {
-      return;
-    }
-
-    const ticketId = getQueryParam("ticketId") || readLastTicketId();
-    const title = document.querySelector("[data-checkout-title]");
-    const lede = document.querySelector("[data-checkout-lede]");
-    const routeBox = document.querySelector("[data-checkout-route]");
-    const basePriceNode = document.querySelector("[data-checkout-base-price]");
-    const departureBox = document.querySelector("[data-checkout-departure]");
-    const seatBox = document.querySelector("[data-checkout-seat-available]");
-    const tripLink = document.querySelector("[data-checkout-trip-link]");
-    const backLink = document.querySelector("[data-checkout-back-link]");
-    const submitButton = document.querySelector("[data-submit-order]");
-    const saveDraftButton = document.querySelector("[data-save-draft]");
-    const passengerNameInput = document.querySelector("[name='passengerName']");
-    const idCardInput = document.querySelector("[name='idCard']");
-    const phoneInput = document.querySelector("[name='phone']");
-    const seatTypeInput = document.querySelector("[name='seatType']");
-    const ticketCountInput = document.querySelector("[name='ticketCount']");
-
-    function renderMissingTicketState() {
-      if (title) {
-        title.textContent = "缂哄皯鐝缂栧彿";
-      }
-      if (lede) {
-        lede.textContent = "褰撳墠涓嬪崟纭椤垫病鏈夋敹鍒?ticketId锛岃浠庣彮娆¤鎯呴〉閲嶆柊杩涘叆銆?";
-      }
-      if (routeBox) {
-        routeBox.textContent = "鏃犳硶鍒涘缓璁㈠崟";
-      }
-      if (departureBox) {
-        departureBox.textContent = "璇疯繑鍥炵彮娆¤鎯呴〉";
-      }
-      if (seatBox) {
-        seatBox.textContent = "--";
-      }
-      if (submitButton) {
-        submitButton.disabled = true;
-      }
-    }
-
-    if (!ticketId) {
-      renderMissingTicketState();
-      return;
-    }
-
-    if (!getQueryParam("ticketId")) {
-      const currentUrl = new URL(window.location.href);
-      currentUrl.searchParams.set("ticketId", ticketId);
-      window.history.replaceState({}, "", currentUrl.toString());
-    }
-
-    const detailHref = `${ROUTES.passenger.tripDetail}?ticketId=${encodeURIComponent(ticketId)}`;
-    if (tripLink) {
-      tripLink.href = detailHref;
-    }
-    if (backLink) {
-      backLink.href = detailHref;
-    }
-
-    if (saveDraftButton) {
-      saveDraftButton.addEventListener("click", () => {
-        showToast("鑽夌浠呬繚瀛樺湪褰撳墠椤甸潰锛屽埛鏂板悗浼氫涪澶?");
-      });
-    }
-
-    let currentTrip = null;
-    let submitting = false;
-
-    function fillProfileDefaults() {
-      const auth = readAuth();
-      if (passengerNameInput && !passengerNameInput.value && auth?.nickname) {
-        passengerNameInput.value = auth.nickname;
-      }
-      if (phoneInput && !phoneInput.value && auth?.phone) {
-        phoneInput.value = auth.phone;
-      }
-    }
-
-    fillProfileDefaults();
-
-    api.get(API_ENDPOINTS.passenger.ticketDetail, undefined, { pathParams: { ticketId } })
-      .then((result) => {
-        const trip = result?.data;
-        if (!trip) {
-          throw new Error("鐝涓嶅瓨鍦?");
-        }
-
-        currentTrip = trip;
-
-        if (title) {
-          title.textContent = `${trip.startCity} -> ${trip.endCity}`;
-        }
-        if (lede) {
-          lede.textContent = "纭鏁伴噺鍚庢彁浜よ鍗曪紝绯荤粺浼氬垱寤虹湡瀹炶鍗曞苟鑷姩璺宠浆鍒版敮浠橀〉銆?";
-        }
-        if (routeBox) {
-          routeBox.textContent = `${trip.startCity} -> ${trip.endCity}`;
-        }
-        if (basePriceNode) {
-          basePriceNode.dataset.basePrice = String(Number(trip.priceCent || 0));
-          basePriceNode.textContent = formatPriceCent(trip.priceCent);
-        }
-        if (departureBox) {
-          departureBox.textContent = formatFullDateTime(trip.departureTime);
-        }
-        if (seatBox) {
-          seatBox.textContent = `${trip.seatAvailable || 0} / ${trip.seatTotal || 0}`;
-        }
-
-        const totalOutput = document.querySelector("[data-total-output]");
-        if (totalOutput && ticketCountInput) {
-          const updateTotal = () => {
-            const quantity = Math.max(1, Number(ticketCountInput.value || 1));
-            totalOutput.textContent = formatPriceCent(Number(trip.priceCent || 0) * quantity);
-          };
-          ticketCountInput.addEventListener("input", updateTotal);
-          ticketCountInput.addEventListener("change", updateTotal);
-          updateTotal();
-        }
-      })
-      .catch((error) => {
-        if (title) {
-          title.textContent = "鐝鍔犺浇澶辫触";
-        }
-        if (lede) {
-          lede.textContent = error.message || "鏃犳硶璇诲彇鐝淇℃伅";
-        }
-        if (submitButton) {
-          submitButton.disabled = true;
-        }
-      });
-
-    if (!submitButton) {
-      return;
-    }
-
-    submitButton.addEventListener("click", async () => {
-      if (submitting) {
-        return;
-      }
-
-      const passengerName = String(passengerNameInput?.value || "").trim();
-      const idCard = String(idCardInput?.value || "").trim();
-      const phone = String(phoneInput?.value || "").trim();
-      const seatType = String(seatTypeInput?.value || "standard").trim() || "standard";
-      const ticketCount = Math.max(1, Number(ticketCountInput?.value || 1));
-
-      if (!currentTrip) {
-        showToast("鐝淇℃伅杩樻病鍔犺浇瀹屾垚");
-        return;
-      }
-      if (!passengerName) {
-        showToast("璇疯緭鍏ヤ箻杞︿汉濮撳悕");
-        return;
-      }
-      if (!idCard) {
-        showToast("璇疯緭鍏ヨ韩浠借瘉鍙?");
-        return;
-      }
-      if (!phone) {
-        showToast("璇疯緭鍏ユ墜鏈哄彿");
-        return;
-      }
-      if (!Number.isInteger(ticketCount) || ticketCount <= 0) {
-        showToast("璐エ鏁伴噺蹇呴』澶т簬 0");
-        return;
-      }
-
-      submitting = true;
-      const originalText = submitButton.textContent;
-      submitButton.disabled = true;
-      submitButton.textContent = "鎻愪氦涓?..";
-
-      try {
-        const result = await api.post(API_ENDPOINTS.passenger.createOrder, {
-          tripId: Number(ticketId),
-          ticketCount,
-          seatType,
-        });
-        const order = result?.data;
-        if (!order?.id) {
-          throw new Error("璁㈠崟鍒涘缓鎴愬姛锛屼絾鏈繑鍥炶鍗曞彿");
-        }
-        showToast("璁㈠崟宸插垱寤猴紝姝ｅ湪璺宠浆鏀粯椤?");
-        window.location.href = `${ROUTES.passenger.payment}?orderId=${encodeURIComponent(order.id)}`;
-      } catch (error) {
-        showToast(error.message || "鍒涘缓璁㈠崟澶辫触");
-        submitButton.disabled = false;
-        submitButton.textContent = originalText;
-        submitting = false;
-      }
-    });
+    return;
   }
 
   function initOrdersPage() {
-    if (getCurrentFileName() !== ROUTES.passenger.orders) {
-      return;
-    }
-
-    const summaryBox = document.querySelector("[data-order-summary]");
-    const listBox = document.querySelector("[data-order-list]");
-    if (!summaryBox || !listBox) {
-      return;
-    }
-
-    api.get(API_ENDPOINTS.passenger.myOrders)
-      .then((result) => {
-        const orders = result?.data || [];
-
-        const pendingPaymentCount = orders.filter((order) => order?.orderStatus === "pending_payment" || order?.payStatus === "unpaid").length;
-        const pendingDepartureCount = orders.filter((order) => order?.orderStatus === "pending_verification").length;
-        const completedCount = orders.filter((order) => order?.orderStatus === "completed").length;
-
-        summaryBox.innerHTML = `
-          <span class="mini-chip">寰呮敮浠?${pendingPaymentCount}</span>
-          <span class="mini-chip">寰呭嚭鍙?${pendingDepartureCount}</span>
-          <span class="mini-chip">宸插畬鎴?${completedCount}</span>
-        `;
-
-        if (!orders.length) {
-          listBox.innerHTML = `
-            <div class="info-card">
-              <strong>杩樻病鏈夎鍗?/strong>
-              <p class="muted">鍏堝幓鎼滅储鐝骞跺畬鎴愪笅鍗曪紝杩欓噷灏变細鍑虹幇浣犵殑璁㈠崟璁板綍銆?/p>
-            </div>
-          `;
-          return;
-        }
-
-        listBox.innerHTML = orders.map((order) => {
-          const trip = order?.trip || {};
-          const route = `${trip.startCity || "--"} 鈫?${trip.endCity || "--"}`;
-          const departureTime = formatFullDateTime(trip.departureTime);
-          const statusText = mapOrderStatus(order?.orderStatus, order?.payStatus);
-          const refundTag = order?.refundStatus && order.refundStatus !== "none"
-            ? `<span class="tag">${escapeHtml(mapRefundStatus(order.refundStatus))}</span>`
-            : "";
-
-          const primaryAction = statusText === "待支付"
-            ? `<a class="button button-primary" href="${ROUTES.passenger.payment}?orderId=${order.id}">去支付</a>`
-            : `<a class="button button-primary" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">鏌ョ湅璇︽儏</a>`;
-
-          const secondaryAction = statusText === "待支付"
-            ? `<a class="button button-secondary" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">订单详情</a>`
-            : `<a class="button button-ghost" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">鏌ョ湅鐢靛瓙绁?/a>`;
-
-          return `
-            <div class="order-card">
-              <div class="order-top">
-                <div>
-                  <strong>${escapeHtml(order.orderNo || `璁㈠崟 #${order.id}`)}</strong>
-                  <div class="list-meta">
-                    <span>${escapeHtml(route)}</span>
-                    <span>${escapeHtml(departureTime)}</span>
-                    ${refundTag}
-                  </div>
-                </div>
-                <div class="price-pill">${escapeHtml(formatMoneyFromCent(order.amount))} <small>${escapeHtml(statusText)}</small></div>
-              </div>
-              <div class="button-row">
-                ${primaryAction}
-                ${secondaryAction}
-              </div>
-            </div>
-          `;
-        }).join("");
-      })
-      .catch((error) => {
-        listBox.innerHTML = `
-          <div class="info-card">
-            <strong>璁㈠崟鍔犺浇澶辫触</strong>
-            <p class="muted">${escapeHtml(error.message || "请稍后再试")}</p>
-          </div>
-        `;
-      });
+    return;
   }
 
   function initOrdersPage() {
-    if (getCurrentFileName() !== ROUTES.passenger.orders) {
-      return;
-    }
-
-    const summaryBox = document.querySelector("[data-order-summary]");
-    const listBox = document.querySelector("[data-order-list]");
-    if (!summaryBox || !listBox) {
-      return;
-    }
-
-    summaryBox.style.display = "none";
-    summaryBox.innerHTML = "";
-
-    api.get(API_ENDPOINTS.passenger.myOrders)
-      .then((result) => {
-        const orders = Array.isArray(result?.data) ? result.data : [];
-
-        if (!orders.length) {
-          listBox.innerHTML = `
-            <div class="info-card">
-              <strong>鏆傛棤璁㈠崟</strong>
-              <p class="muted">褰撳墠璐﹀彿杩樻病鏈変换浣曡鍗曡褰曘€?/p>
-            </div>
-          `;
-          return;
-        }
-
-        const pendingPaymentCount = orders.filter((order) => order?.orderStatus === "pending_payment" || order?.payStatus === "unpaid").length;
-        const pendingDepartureCount = orders.filter((order) => order?.orderStatus === "pending_verification").length;
-        const completedCount = orders.filter((order) => order?.orderStatus === "completed").length;
-
-        summaryBox.style.display = "";
-        summaryBox.innerHTML = `
-          <span class="mini-chip">寰呮敮浠?${pendingPaymentCount}</span>
-          <span class="mini-chip">寰呭嚭鍙?${pendingDepartureCount}</span>
-          <span class="mini-chip">宸插畬鎴?${completedCount}</span>
-        `;
-
-        listBox.innerHTML = orders.map((order) => {
-          const trip = order?.trip || null;
-          const route = trip ? `${trip.startCity} 鈫?${trip.endCity}` : "";
-          const departureTime = trip?.departureTime ? formatFullDateTime(trip.departureTime) : "";
-          const statusText = mapOrderStatus(order?.orderStatus, order?.payStatus);
-          const refundTag = order?.refundStatus && order.refundStatus !== "none"
-            ? `<span class="tag">${escapeHtml(mapRefundStatus(order.refundStatus))}</span>`
-            : "";
-
-          const primaryAction = statusText === "待支付"
-            ? `<a class="button button-primary" href="${ROUTES.passenger.payment}?orderId=${order.id}">去支付</a>`
-            : `<a class="button button-primary" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">鏌ョ湅璇︽儏</a>`;
-
-          const secondaryAction = statusText === "待支付"
-            ? `<a class="button button-secondary" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">订单详情</a>`
-            : `<a class="button button-ghost" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">鏌ョ湅鐢靛瓙绁?/a>`;
-
-          return `
-            <div class="order-card">
-              <div class="order-top">
-                <div>
-                  <strong>${escapeHtml(order.orderNo || "")}</strong>
-                  <div class="list-meta">
-                    ${route ? `<span>${escapeHtml(route)}</span>` : ""}
-                    ${departureTime ? `<span>${escapeHtml(departureTime)}</span>` : ""}
-                    ${refundTag}
-                  </div>
-                </div>
-                <div class="price-pill">${escapeHtml(formatMoneyFromCent(order.amount))} <small>${escapeHtml(statusText)}</small></div>
-              </div>
-              <div class="button-row">
-                ${primaryAction}
-                ${secondaryAction}
-              </div>
-            </div>
-          `;
-        }).join("");
-      })
-      .catch((error) => {
-        summaryBox.style.display = "none";
-        summaryBox.innerHTML = "";
-        listBox.innerHTML = `
-          <div class="info-card">
-            <strong>璁㈠崟鍔犺浇澶辫触</strong>
-            <p class="muted">${escapeHtml(error.message || "请稍后再试")}</p>
-          </div>
-        `;
-      });
+    return;
   }
 
   function initOrderDetailPage() {
-    if (getCurrentFileName() !== ROUTES.passenger.orderDetail) {
-      return;
-    }
-
-    const orderId = getQueryParam("orderId");
-    if (!orderId) {
-      return;
-    }
-
-    const auth = readAuth() || {};
-    const title = document.querySelector("[data-order-detail-title]");
-    const statusBox = document.querySelector("[data-order-detail-status]");
-    const timelineBox = document.querySelector("[data-order-detail-timeline]");
-    const metaBox = document.querySelector("[data-order-detail-meta]");
-    const pricingBox = document.querySelector("[data-order-detail-pricing]");
-    const actionsBox = document.querySelector("[data-order-detail-actions]");
-
-    api.get(API_ENDPOINTS.passenger.orderDetail, undefined, { pathParams: { orderId } })
-      .then((result) => {
-        const order = result?.data;
-        if (!order) {
-          throw new Error("璁㈠崟涓嶅瓨鍦?");
-        }
-
-        const trip = order.trip || {};
-        const statusText = mapOrderStatus(order.orderStatus, order.payStatus);
-        const routeTitle = `${trip.startCity || "--"} 鈫?${trip.endCity || "--"}`;
-        const ticketCount = Number(order.ticketCount || 0);
-        const unitPrice = ticketCount > 0 ? Math.round(Number(order.amount || 0) / ticketCount) : Number(order.amount || 0);
-        const stops = Array.isArray(trip.stops) ? trip.stops : [];
-
-        if (title) {
-          title.textContent = order.orderNo || routeTitle;
-        }
-
-        if (statusBox) {
-          statusBox.textContent = statusText;
-        }
-
-        if (timelineBox) {
-          const stopMarkup = stops.map((stop) => `
-            <div class="timeline-item">
-              <span class="timeline-dot"></span>
-              <strong>${escapeHtml(stop.stopName || "--")}</strong>
-              <p class="muted">${escapeHtml(formatFullDateTime(stop.planArrivalTime || stop.planDepartureTime || trip.departureTime))}</p>
-            </div>
-          `).join("");
-
-          timelineBox.innerHTML = `
-            <div class="timeline-item">
-              <span class="timeline-dot"></span>
-              <strong>${escapeHtml(trip.startCity || "--")}</strong>
-              <p class="muted">${escapeHtml(formatFullDateTime(trip.departureTime))}</p>
-            </div>
-            ${stopMarkup}
-            <div class="timeline-item">
-              <span class="timeline-dot"></span>
-              <strong>${escapeHtml(trip.endCity || "--")}</strong>
-              <p class="muted">${escapeHtml(formatFullDateTime(trip.arrivalTime))}</p>
-            </div>
-          `;
-        }
-
-        if (metaBox) {
-          metaBox.innerHTML = `
-            <div class="list-item">
-              <strong>绾胯矾淇℃伅</strong>
-              <div class="list-meta"><span>${escapeHtml(routeTitle)}</span><span>${escapeHtml(trip.vehicleType || "car")}</span></div>
-            </div>
-            <div class="list-item">
-              <strong>涔樿溅浜?/strong>
-              <div class="list-meta"><span>${escapeHtml(auth.nickname || auth.phone || "褰撳墠璐﹀彿")}</span><span>${escapeHtml(auth.phone || "")}</span></div>
-            </div>
-            <div class="list-item">
-              <strong>搴т綅涓庡紶鏁?/strong>
-              <div class="list-meta"><span>${escapeHtml(mapSeatType(order.seatType))}</span><span>${ticketCount} 寮?/span></div>
-            </div>
-            <div class="list-item">
-              <strong>鏀粯涓庨€€娆?/strong>
-              <div class="list-meta"><span>${escapeHtml(order.payStatus || "--")}</span><span>${escapeHtml(mapRefundStatus(order.refundStatus))}</span></div>
-            </div>
-          `;
-        }
-
-        if (pricingBox) {
-          pricingBox.innerHTML = `
-            <div class="pricing-row"><span>鍗曚环</span><strong>${escapeHtml(formatMoneyFromCent(unitPrice))}</strong></div>
-            <div class="pricing-row"><span>鏁伴噺</span><strong>${ticketCount} 寮?/strong></div>
-            <div class="pricing-row pricing-total"><span>瀹炰粯</span><strong>${escapeHtml(formatMoneyFromCent(order.amount))}</strong></div>
-          `;
-        }
-
-        if (actionsBox) {
-          const primaryAction = statusText === "待支付"
-            ? `<a class="button button-primary" href="${ROUTES.passenger.payment}?orderId=${order.id}">缁х画鏀粯</a>`
-            : `<button class="button button-primary" type="button" data-toast="鐢靛瓙绁ㄥ姛鑳藉凡棰勭暀锛屽悗缁彲缁х画鎺ヤ簩缁寸爜鎺ュ彛">鏌ョ湅鐢靛瓙绁?/button>`;
-
-          const refundAction = order.refundStatus === "requested"
-            ? `<button class="button button-ghost" type="button" data-toast="閫€娆剧敵璇锋鍦ㄥ鐞嗕腑">閫€娆惧鐞嗕腑</button>`
-            : `<button class="button button-ghost" type="button" data-toast="閫€娆炬帴鍙ｄ笅涓€姝ュ彲浠ョ户缁帴涓?>鐢宠閫€娆?/button>`;
-
-          actionsBox.innerHTML = `
-            ${primaryAction}
-            ${refundAction}
-            <a class="button button-secondary" href="${ROUTES.passenger.orders}">杩斿洖璁㈠崟鍒楄〃</a>
-          `;
-          initToastTriggers();
-        }
-      })
-      .catch((error) => {
-        if (title) {
-          title.textContent = error.message || "璁㈠崟鍔犺浇澶辫触";
-        }
-        if (timelineBox) {
-          timelineBox.innerHTML = `
-            <div class="timeline-item">
-              <span class="timeline-dot"></span>
-              <strong>鍔犺浇澶辫触</strong>
-              <p class="muted">${escapeHtml(error.message || "请稍后再试")}</p>
-            </div>
-          `;
-        }
-      });
+    return;
   }
 
   function initOrderDetailPage() {
-    if (getCurrentFileName() !== ROUTES.passenger.orderDetail) {
-      return;
-    }
-
-    const orderId = getQueryParam("orderId");
-    if (!orderId) {
-      return;
-    }
-
-    const auth = readAuth() || {};
-    const title = document.querySelector("[data-order-detail-title]");
-    const statusBox = document.querySelector("[data-order-detail-status]");
-    const timelineBox = document.querySelector("[data-order-detail-timeline]");
-    const metaBox = document.querySelector("[data-order-detail-meta]");
-    const pricingBox = document.querySelector("[data-order-detail-pricing]");
-    const actionsBox = document.querySelector("[data-order-detail-actions]");
-
-    api.get(API_ENDPOINTS.passenger.orderDetail, undefined, { pathParams: { orderId } })
-      .then((result) => {
-        const order = result?.data;
-        if (!order) {
-          throw new Error("璁㈠崟涓嶅瓨鍦?");
-        }
-
-        const trip = order.trip || {};
-        const statusText = mapOrderStatus(order.orderStatus, order.payStatus);
-        const routeTitle = trip.startCity && trip.endCity ? `${trip.startCity} 鈫?${trip.endCity}` : "";
-        const ticketCount = Number(order.ticketCount || 0);
-        const unitPrice = ticketCount > 0 ? Math.round(Number(order.amount || 0) / ticketCount) : Number(order.amount || 0);
-        const stops = Array.isArray(trip.stops) ? trip.stops : [];
-
-        if (title) {
-          title.textContent = order.orderNo || "璁㈠崟璇︽儏";
-        }
-
-        if (statusBox) {
-          statusBox.textContent = statusText;
-        }
-
-        if (timelineBox) {
-          const stopMarkup = stops.map((stop) => `
-            <div class="timeline-item">
-              <span class="timeline-dot"></span>
-              <strong>${escapeHtml(stop.stopName || "")}</strong>
-              <p class="muted">${escapeHtml(formatFullDateTime(stop.planArrivalTime || stop.planDepartureTime || trip.departureTime))}</p>
-            </div>
-          `).join("");
-
-          timelineBox.innerHTML = `
-            <div class="timeline-item">
-              <span class="timeline-dot"></span>
-              <strong>${escapeHtml(trip.startCity || "")}</strong>
-              <p class="muted">${escapeHtml(formatFullDateTime(trip.departureTime))}</p>
-            </div>
-            ${stopMarkup}
-            <div class="timeline-item">
-              <span class="timeline-dot"></span>
-              <strong>${escapeHtml(trip.endCity || "")}</strong>
-              <p class="muted">${escapeHtml(formatFullDateTime(trip.arrivalTime))}</p>
-            </div>
-          `;
-        }
-
-        if (metaBox) {
-          metaBox.innerHTML = `
-            <div class="list-item">
-              <strong>绾胯矾淇℃伅</strong>
-              <div class="list-meta"><span>${escapeHtml(routeTitle)}</span><span>${escapeHtml(trip.vehicleType || "car")}</span></div>
-            </div>
-            <div class="list-item">
-              <strong>涔樿溅浜?/strong>
-              <div class="list-meta"><span>${escapeHtml(auth.nickname || auth.phone || "褰撳墠璐﹀彿")}</span><span>${escapeHtml(auth.phone || "")}</span></div>
-            </div>
-            <div class="list-item">
-              <strong>搴т綅涓庡紶鏁?/strong>
-              <div class="list-meta"><span>${escapeHtml(mapSeatType(order.seatType))}</span><span>${ticketCount} 寮?/span></div>
-            </div>
-            <div class="list-item">
-              <strong>鏀粯涓庨€€娆?/strong>
-              <div class="list-meta"><span>${escapeHtml(order.payStatus || "--")}</span><span>${escapeHtml(mapRefundStatus(order.refundStatus))}</span></div>
-            </div>
-          `;
-        }
-
-        if (pricingBox) {
-          pricingBox.innerHTML = `
-            <div class="pricing-row"><span>鍗曚环</span><strong>${escapeHtml(formatMoneyFromCent(unitPrice))}</strong></div>
-            <div class="pricing-row"><span>鏁伴噺</span><strong>${ticketCount} 寮?/strong></div>
-            <div class="pricing-row pricing-total"><span>瀹炰粯</span><strong>${escapeHtml(formatMoneyFromCent(order.amount))}</strong></div>
-          `;
-        }
-
-        if (actionsBox) {
-          const canContinuePay = order.orderStatus === "pending_payment" || order.payStatus === "unpaid";
-          const canCancel = order.orderStatus === "pending_payment";
-          const canRequestRefund =
-            (order.orderStatus === "pending_verification" || order.orderStatus === "completed") &&
-            order.payStatus === "paid" &&
-            order.orderStatus !== "cancelled" &&
-            (order.refundStatus === "none" || order.refundStatus === "rejected");
-
-          const primaryAction = canContinuePay
-            ? `<a class="button button-primary" href="${ROUTES.passenger.payment}?orderId=${order.id}">缁х画鏀粯</a>`
-            : `<button class="button button-primary" type="button" data-toast="鐢靛瓙绁ㄥ姛鑳藉凡棰勭暀锛屽悗缁彲缁х画鎺ヤ簩缁寸爜鎺ュ彛">鏌ョ湅鐢靛瓙绁?/button>`;
-
-          const cancelAction = canCancel
-            ? `<button class="button button-ghost" type="button" data-order-cancel>鍙栨秷璁㈠崟</button>`
-            : "";
-
-          const refundAction = order.refundStatus === "requested"
-            ? `<button class="button button-ghost" type="button" disabled>閫€娆惧鐞嗕腑</button>`
-            : canRequestRefund
-              ? `<button class="button button-ghost" type="button" data-order-refund>鐢宠閫€娆?/button>`
-              : "";
-
-          actionsBox.innerHTML = `
-            ${primaryAction}
-            ${cancelAction}
-            ${refundAction}
-            <a class="button button-secondary" href="${ROUTES.passenger.orders}">杩斿洖璁㈠崟鍒楄〃</a>
-          `;
-          initToastTriggers();
-
-          const cancelButton = actionsBox.querySelector("[data-order-cancel]");
-          if (cancelButton) {
-            cancelButton.addEventListener("click", async () => {
-              if (!window.confirm("确认取消这个订单吗？")) {
-                return;
-              }
-
-              try {
-                cancelButton.disabled = true;
-                cancelButton.textContent = "鍙栨秷涓?..";
-                await api.post(API_ENDPOINTS.passenger.cancelOrder, {}, { pathParams: { orderId } });
-                showToast("璁㈠崟宸插彇娑?");
-                window.setTimeout(() => window.location.reload(), 300);
-              } catch (error) {
-                cancelButton.disabled = false;
-                cancelButton.textContent = "鍙栨秷璁㈠崟";
-                showToast(error.message || "鍙栨秷璁㈠崟澶辫触");
-              }
-            });
-          }
-
-          const refundButton = actionsBox.querySelector("[data-order-refund]");
-          if (refundButton) {
-            refundButton.addEventListener("click", async () => {
-              if (!window.confirm("确认提交退款申请吗？")) {
-                return;
-              }
-
-              try {
-                refundButton.disabled = true;
-                refundButton.textContent = "鎻愪氦涓?..";
-                await api.post(API_ENDPOINTS.passenger.refundOrder, {}, { pathParams: { orderId } });
-                showToast("閫€娆剧敵璇峰凡鎻愪氦");
-                window.setTimeout(() => window.location.reload(), 300);
-              } catch (error) {
-                refundButton.disabled = false;
-                refundButton.textContent = "鐢宠閫€娆?";
-                showToast(error.message || "閫€娆剧敵璇峰け璐?");
-              }
-            });
-          }
-        }
-      })
-      .catch((error) => {
-        if (title) {
-          title.textContent = error.message || "璁㈠崟鍔犺浇澶辫触";
-        }
-        if (timelineBox) {
-          timelineBox.innerHTML = `
-            <div class="timeline-item">
-              <span class="timeline-dot"></span>
-              <strong>鍔犺浇澶辫触</strong>
-              <p class="muted">${escapeHtml(error.message || "请稍后再试")}</p>
-            </div>
-          `;
-        }
-      });
+    return;
   }
 
   function initProfilePage() {
@@ -2526,259 +1801,7 @@
   }
 
   function initPaymentPage() {
-    if (getCurrentFileName() !== ROUTES.passenger.payment) {
-      return;
-    }
-
-    const title = document.querySelector("[data-payment-title]");
-    const lede = document.querySelector("[data-payment-lede]");
-    const summaryBox = document.querySelector("[data-payment-summary]");
-    const orderBox = document.querySelector("[data-payment-order]");
-    const amountBox = document.querySelector("[data-payment-amount]");
-    const actionsBox = document.querySelector("[data-payment-actions]");
-    const orderId = getQueryParam("orderId");
-    if (!orderId) {
-      if (title) {
-        title.textContent = "缂哄皯璁㈠崟鍙?";
-      }
-      if (lede) {
-        lede.textContent = "褰撳墠鏀粯椤垫病鏈夋敹鍒?orderId锛岃浠庤鍗曡鎯呴〉鎴栬鍗曞垪琛ㄩ噸鏂拌繘鍏ャ€?";
-      }
-      if (summaryBox) {
-        summaryBox.innerHTML = `
-          <div class="list-item">
-            <strong>鏃犳硶鍙戣捣鏀粯</strong>
-            <div class="list-meta"><span>鍘熷洜</span><span>URL 涓己灏?orderId</span></div>
-          </div>
-        `;
-      }
-      if (orderBox) {
-        orderBox.innerHTML = `
-          <div class="list-item">
-            <strong>寤鸿鎿嶄綔</strong>
-            <div class="list-meta"><span>杩斿洖璁㈠崟璇︽儏椤?/span><span>閲嶆柊鐐瑰嚮鏀粯</span></div>
-          </div>
-        `;
-      }
-      if (amountBox) {
-        amountBox.innerHTML = `
-          <div class="pricing-row"><span>璁㈠崟閲戦</span><strong>--</strong></div>
-          <div class="pricing-row"><span>鏀粯鐘舵€?/span><strong>--</strong></div>
-          <div class="pricing-row pricing-total"><span>璁㈠崟鐘舵€?/span><strong>--</strong></div>
-        `;
-      }
-      if (actionsBox) {
-        actionsBox.innerHTML = `
-          <a class="button button-primary" href="${ROUTES.passenger.orders}">杩斿洖璁㈠崟鍒楄〃</a>
-          <a class="button button-secondary" href="${ROUTES.passenger.orderDetail}">鎵撳紑璁㈠崟璇︽儏椤?/a>
-        `;
-      }
-      return;
-    }
-    let currentPaymentId = "";
-    let pollTimer = null;
-
-    const stopPolling = () => {
-      if (pollTimer) {
-        window.clearInterval(pollTimer);
-        pollTimer = null;
-      }
-    };
-
-    const fetchPaymentStatus = async (paymentId) => {
-      const result = await api.get(API_ENDPOINTS.passenger.paymentStatus, undefined, {
-        pathParams: { paymentId },
-      });
-      return result?.data || null;
-    };
-
-    const startPolling = (paymentId) => {
-      stopPolling();
-      pollTimer = window.setInterval(async () => {
-        try {
-          const payment = await fetchPaymentStatus(paymentId);
-          if (payment?.status === "paid") {
-            stopPolling();
-            showToast("鏀粯鎴愬姛");
-            window.setTimeout(() => {
-              redirectTo(`${ROUTES.passenger.orderDetail}?orderId=${orderId}`);
-            }, 300);
-          }
-        } catch (_) {
-          stopPolling();
-        }
-      }, 2000);
-    };
-
-    const renderActions = (order, payment) => {
-      const isPaid = order?.payStatus === "paid";
-      const paymentStatus = payment?.status || "pending";
-
-      if (!actionsBox) {
-        return;
-      }
-
-      if (isPaid) {
-        actionsBox.innerHTML = `
-          <a class="button button-primary" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">鏌ョ湅璁㈠崟璇︽儏</a>
-          <a class="button button-secondary" href="${ROUTES.passenger.orders}">杩斿洖璁㈠崟鍒楄〃</a>
-        `;
-        return;
-      }
-
-      actionsBox.innerHTML = `
-        <button class="button button-primary" type="button" data-payment-create>${payment ? "继续支付" : "创建支付单"}</button>
-        <button class="button button-ghost" type="button" data-payment-success ${payment ? "" : "disabled"}>妯℃嫙鏀粯鎴愬姛</button>
-        <a class="button button-secondary" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">鏌ョ湅璁㈠崟璇︽儏</a>
-      `;
-
-      const createButton = actionsBox.querySelector("[data-payment-create]");
-      const successButton = actionsBox.querySelector("[data-payment-success]");
-
-      if (createButton) {
-        createButton.addEventListener("click", async () => {
-          try {
-            createButton.disabled = true;
-            createButton.textContent = "鍒涘缓涓?..";
-            const result = await api.post(API_ENDPOINTS.passenger.createPayment, {
-              orderId: Number(order.id),
-              channel: "mock",
-            });
-            const createdPayment = result?.data;
-            currentPaymentId = String(createdPayment?.id || "");
-            if (successButton) {
-              successButton.disabled = !currentPaymentId;
-            }
-            if (summaryBox) {
-              summaryBox.innerHTML = `
-                <div class="list-item">
-                  <strong>鏀粯鍗曞彿</strong>
-                  <div class="list-meta"><span>${escapeHtml(createdPayment?.paymentNo || "")}</span><span>${escapeHtml(createdPayment?.status || paymentStatus)}</span></div>
-                </div>
-              `;
-            }
-            showToast("鏀粯鍗曞凡鍒涘缓");
-            if (currentPaymentId) {
-              startPolling(currentPaymentId);
-            }
-            createButton.disabled = false;
-            createButton.textContent = "缁х画鏀粯";
-          } catch (error) {
-            createButton.disabled = false;
-            createButton.textContent = "鍒涘缓鏀粯鍗?";
-            showToast(error.message || "鍒涘缓鏀粯鍗曞け璐?");
-          }
-        });
-      }
-
-      if (successButton) {
-        successButton.addEventListener("click", async () => {
-          if (!currentPaymentId) {
-            showToast("璇峰厛鍒涘缓鏀粯鍗?");
-            return;
-          }
-
-          try {
-            successButton.disabled = true;
-            successButton.textContent = "澶勭悊涓?..";
-            await api.post(API_ENDPOINTS.passenger.mockPaymentSuccess, {}, {
-              pathParams: { paymentId: currentPaymentId },
-            });
-            stopPolling();
-            showToast("鏀粯鎴愬姛");
-            window.setTimeout(() => {
-              redirectTo(`${ROUTES.passenger.orderDetail}?orderId=${order.id}`);
-            }, 300);
-          } catch (error) {
-            successButton.disabled = false;
-            successButton.textContent = "妯℃嫙鏀粯鎴愬姛";
-            showToast(error.message || "鏀粯澶辫触");
-          }
-        });
-      }
-    };
-
-    api.get(API_ENDPOINTS.passenger.orderDetail, undefined, { pathParams: { orderId } })
-      .then(async (result) => {
-        const order = result?.data;
-        if (!order) {
-          throw new Error("璁㈠崟涓嶅瓨鍦?");
-        }
-
-        const trip = order.trip || {};
-        const routeTitle = trip.startCity && trip.endCity ? `${trip.startCity} 鈫?${trip.endCity}` : "璁㈠崟鏀粯";
-
-        if (title) {
-          title.textContent = order.payStatus === "paid" ? "该订单已完成支付" : "请完成订单支付";
-        }
-        if (lede) {
-          lede.textContent = routeTitle;
-        }
-        if (orderBox) {
-          orderBox.innerHTML = `
-            <div class="list-item">
-              <strong>璁㈠崟鍙?/strong>
-              <div class="list-meta"><span>${escapeHtml(order.orderNo || "")}</span><span>${escapeHtml(mapOrderStatus(order.orderStatus, order.payStatus))}</span></div>
-            </div>
-            <div class="list-item">
-              <strong>鐝淇℃伅</strong>
-              <div class="list-meta"><span>${escapeHtml(routeTitle)}</span><span>${escapeHtml(formatFullDateTime(trip.departureTime))}</span></div>
-            </div>
-          `;
-        }
-        if (amountBox) {
-          amountBox.innerHTML = `
-            <div class="pricing-row"><span>璁㈠崟閲戦</span><strong>${escapeHtml(formatMoneyFromCent(order.amount))}</strong></div>
-            <div class="pricing-row"><span>鏀粯鐘舵€?/span><strong>${escapeHtml(order.payStatus || "--")}</strong></div>
-            <div class="pricing-row pricing-total"><span>璁㈠崟鐘舵€?/span><strong>${escapeHtml(mapOrderStatus(order.orderStatus, order.payStatus))}</strong></div>
-          `;
-        }
-
-        let payment = null;
-        if (order.payStatus !== "paid") {
-          try {
-            const createResult = await api.post(API_ENDPOINTS.passenger.createPayment, {
-              orderId: Number(order.id),
-              channel: "mock",
-            });
-            payment = createResult?.data || null;
-            currentPaymentId = String(payment?.id || "");
-            if (payment?.id) {
-              startPolling(payment.id);
-            }
-          } catch (_) {
-            payment = null;
-          }
-        }
-
-        if (summaryBox) {
-          summaryBox.innerHTML = payment
-            ? `
-              <div class="list-item">
-                <strong>鏀粯鍗曞彿</strong>
-                <div class="list-meta"><span>${escapeHtml(payment.paymentNo || "")}</span><span>${escapeHtml(payment.status || "")}</span></div>
-              </div>
-            `
-            : `
-              <div class="list-item">
-                <strong>鏀粯璇存槑</strong>
-                <div class="list-meta"><span>褰撳墠涓烘ā鎷熸敮浠?MVP</span><span>鍚庣画鍙帴鐪熷疄缃戝叧</span></div>
-              </div>
-            `;
-        }
-
-        renderActions(order, payment);
-      })
-      .catch((error) => {
-        if (title) {
-          title.textContent = error.message || "鏀粯椤靛姞杞藉け璐?";
-        }
-        if (lede) {
-          lede.textContent = "璇疯繑鍥炶鍗曢〉閲嶆柊灏濊瘯銆?";
-        }
-      });
-
-    window.addEventListener("beforeunload", stopPolling);
+    return;
   }
 
   function initDriverTripDetailPage() {
@@ -2810,14 +1833,14 @@
         const occupancy = trip.seatTotal ? Math.round((sold / trip.seatTotal) * 100) : 0;
         chips.innerHTML = `
           <span class="mini-chip">${escapeHtml(mapTripStatus(trip.status))}</span>
-          <span class="mini-chip">涓婂骇鐜?${occupancy}%</span>
+          <span class="mini-chip">上座?${occupancy}%</span>
         `;
       }
 
       if (timeBox) {
         timeBox.innerHTML = `
           <span>${escapeHtml(formatFullDateTime(trip.departureTime))}</span>
-          <span>棰勮鍒拌揪 ${escapeHtml(formatFullDateTime(trip.arrivalTime))}</span>
+          <span>预计到达 ${escapeHtml(formatFullDateTime(trip.arrivalTime))}</span>
         `;
       }
 
@@ -2844,11 +1867,11 @@
       }
       summaryBox.innerHTML = `
         <div class="info-card">
-          <strong>寰呮牳閿€ ${summary.pendingVerificationCount || 0} 浜?/strong>
+          <strong>待核销 ${summary.pendingVerificationCount || 0} 人</strong>
           <p class="muted">${escapeHtml(summary.pendingVerificationNote || "暂无待核销说明。")}</p>
         </div>
         <div class="info-card">
-          <strong>閫€娆剧敵璇?${summary.refundRequestCount || 0} 绗?/strong>
+          <strong>退款申请 ${summary.refundRequestCount || 0} 笔</strong>
           <p class="muted">${escapeHtml(summary.refundRequestNote || "暂无退款申请。")}</p>
         </div>
       `;
@@ -2863,8 +1886,8 @@
       if (!orders.length) {
         ordersBox.innerHTML = `
           <div class="info-card">
-            <strong>褰撳墠鐝杩樻病鏈夎鍗?/strong>
-            <p class="muted">涔樺瀹屾垚涓嬪崟鍜屾敮浠樺悗锛岃繖閲屼細鍑虹幇鐪熷疄璁㈠崟銆?/p>
+            <strong>当前班次还没有订单</strong>
+            <p class="muted">乘客完成下单和支付后，这里会出现真实订单。</p>
           </div>
         `;
         return;
@@ -2875,7 +1898,7 @@
         return `
           <div class="info-card" data-driver-order-card="${order.id}">
             <div class="row-between">
-              <strong>${escapeHtml(order.orderNo || `璁㈠崟 #${order.id}`)}</strong>
+              <strong>${escapeHtml(order.orderNo || `订单 #${order.id}`)}</strong>
               <span class="tag">${escapeHtml(mapOrderStatus(order.orderStatus, order.payStatus))}</span>
             </div>
             <div class="list-meta">
@@ -2885,12 +1908,12 @@
               <span>${escapeHtml(formatMoneyFromCent(order.amount || 0))}</span>
             </div>
             <div class="list-meta">
-              <span>鏀粯鐘舵€侊細${escapeHtml(order.payStatus || "--")}</span>
-              <span>閫€娆剧姸鎬侊細${escapeHtml(mapRefundStatus(order.refundStatus))}</span>
+              <span>支付状态：${escapeHtml(order.payStatus || "--")}</span>
+              <span>退款状态：${escapeHtml(mapRefundStatus(order.refundStatus))}</span>
             </div>
             <div class="button-row section-block">
               <button class="button button-primary" type="button" data-driver-verify-order="${order.id}" ${canVerify ? "" : "disabled"}>
-                ${canVerify ? "鏍搁攢瀹屾垚" : "涓嶅彲鏍搁攢"}
+                ${canVerify ? "核销完成" : "不可核销"}
               </button>
             </div>
           </div>
@@ -2906,16 +1929,16 @@
 
           const originalText = button.textContent;
           button.disabled = true;
-          button.textContent = "鏍搁攢涓?..";
+          button.textContent = "核销?..";
 
           try {
-            await api.post("/driver/orders/:orderId/verify", {}, { pathParams: { orderId } });
-            showToast("璁㈠崟宸叉牳閿€瀹屾垚");
+            await api.post(API_ENDPOINTS.driver.verifyOrder, {}, { pathParams: { orderId } });
+            showToast("订单已核销完成");
             await reload();
           } catch (error) {
             button.disabled = false;
             button.textContent = originalText;
-            showToast(error.message || "鏍搁攢澶辫触");
+            showToast(error.message || "核销失败");
           }
         });
       });
@@ -2925,7 +1948,7 @@
       const result = await api.get(API_ENDPOINTS.driver.tripDetail, undefined, { pathParams: { tripId } });
       const trip = result?.data;
       if (!trip) {
-        throw new Error("鐝涓嶅瓨鍦?");
+        throw new Error("班次不存在");
       }
       renderTripDetail(trip);
       renderSummary(trip);
@@ -2936,22 +1959,22 @@
       refreshButton.addEventListener("click", () => {
         loadTripDetail()
           .then(() => {
-            showToast("璁㈠崟鍒楄〃宸插埛鏂?");
+            showToast("订单列表已刷新");
           })
           .catch((error) => {
-            showToast(error.message || "鍒锋柊澶辫触");
+            showToast(error.message || "刷新失败");
           });
       });
     }
 
     loadTripDetail().catch((error) => {
       if (title) {
-        title.textContent = error.message || "鐝鍔犺浇澶辫触";
+        title.textContent = error.message || "班次加载失败";
       }
       if (summaryBox) {
         summaryBox.innerHTML = `
           <div class="info-card">
-            <strong>璇诲彇澶辫触</strong>
+            <strong>读取失败</strong>
             <p class="muted">${escapeHtml(error.message || "请稍后重试。")}</p>
           </div>
         `;
@@ -2959,7 +1982,7 @@
       if (ordersBox) {
         ordersBox.innerHTML = `
           <div class="info-card">
-            <strong>鏃犳硶璇诲彇璁㈠崟鍒楄〃</strong>
+            <strong>无法读取订单列表</strong>
             <p class="muted">${escapeHtml(error.message || "请稍后重试。")}</p>
           </div>
         `;
@@ -3000,7 +2023,7 @@
       .then((result) => {
         const trip = result?.data;
         if (!trip) {
-          throw new Error("鐝涓嶅瓨鍦?");
+          throw new Error("班次不存?");
         }
 
         if (title) {
@@ -3061,7 +2084,7 @@
       })
       .catch((error) => {
         if (title) {
-          title.textContent = error.message || "鐝鍔犺浇澶辫触";
+          title.textContent = error.message || "班次加载失败";
         }
       });
   }
@@ -3095,16 +2118,16 @@
 
     function renderMissingTicketState() {
       if (title) {
-        title.textContent = "缂哄皯鐝缂栧彿";
+        title.textContent = "缺少班次编号";
       }
       if (lede) {
-        lede.textContent = "褰撳墠涓嬪崟纭椤垫病鏈夋敹鍒?ticketId锛岃浠庣彮娆¤鎯呴〉閲嶆柊杩涘叆銆?";
+        lede.textContent = "当前下单确认页没有收到 ticketId，请从班次详情页重新进入。";
       }
       if (routeBox) {
-        routeBox.textContent = "鏃犳硶鍒涘缓璁㈠崟";
+        routeBox.textContent = "无法创建订单";
       }
       if (departureBox) {
-        departureBox.textContent = "璇疯繑鍥炵彮娆¤鎯呴〉";
+        departureBox.textContent = "请返回班次详情页";
       }
       if (seatBox) {
         seatBox.textContent = "--";
@@ -3117,17 +2140,17 @@
       }
       if (backLink) {
         backLink.href = ROUTES.passenger.search;
-        backLink.textContent = "杩斿洖绁ㄥ姟鎼滅储";
+        backLink.textContent = "返回票务搜索";
       }
       if (submitButton) {
         submitButton.disabled = false;
-        submitButton.textContent = "杩斿洖绁ㄥ姟鎼滅储";
+        submitButton.textContent = "返回票务搜索";
         submitButton.addEventListener("click", () => {
           window.location.href = ROUTES.passenger.search;
         }, { once: true });
       }
       if (saveDraftButton) {
-        saveDraftButton.textContent = "閲嶆柊閫夌彮娆?";
+        saveDraftButton.textContent = "重新选班";
         saveDraftButton.addEventListener("click", () => {
           window.location.href = ROUTES.passenger.search;
         }, { once: true });
@@ -3149,7 +2172,7 @@
 
     if (saveDraftButton) {
       saveDraftButton.addEventListener("click", () => {
-        showToast("鑽夌鍙繚瀛樺湪褰撳墠椤甸潰锛屽埛鏂板悗浼氫涪澶?");
+        showToast("草稿只保存在当前页面，刷新后会丢失");
       });
     }
 
@@ -3168,7 +2191,7 @@
       .then((result) => {
         const trip = result?.data;
         if (!trip) {
-          throw new Error("鐝涓嶅瓨鍦?");
+          throw new Error("班次不存在");
         }
 
         currentTrip = trip;
@@ -3177,7 +2200,7 @@
           title.textContent = `${trip.startCity} -> ${trip.endCity}`;
         }
         if (lede) {
-          lede.textContent = "纭鏁伴噺鍚庢彁浜よ鍗曪紝绯荤粺浼氬垱寤虹湡瀹炶鍗曞苟鑷姩璺宠浆鍒版敮浠橀〉銆?";
+          lede.textContent = "确认数量后提交订单，系统会创建真实订单并自动跳转到支付页。";
         }
         if (routeBox) {
           routeBox.textContent = `${trip.startCity} -> ${trip.endCity}`;
@@ -3209,10 +2232,10 @@
       })
       .catch((error) => {
         if (title) {
-          title.textContent = "鐝鍔犺浇澶辫触";
+          title.textContent = "班次加载失败";
         }
         if (lede) {
-          lede.textContent = error.message || "鏃犳硶璇诲彇鐝淇℃伅";
+          lede.textContent = error.message || "无法读取班次信息";
         }
         if (submitButton) {
           submitButton.disabled = true;
@@ -3235,30 +2258,30 @@
       const ticketCount = Math.max(1, Number(ticketCountInput?.value || 1));
 
       if (!currentTrip) {
-        showToast("鐝淇℃伅杩樻病鍔犺浇瀹屾垚");
+        showToast("班次信息还没加载完成");
         return;
       }
       if (!passengerName) {
-        showToast("璇疯緭鍏ヤ箻杞︿汉濮撳悕");
+        showToast("请输入乘车人姓名");
         return;
       }
       if (!idCard) {
-        showToast("璇疯緭鍏ヨ韩浠借瘉鍙?");
+        showToast("请输入身份证号");
         return;
       }
       if (!phone) {
-        showToast("璇疯緭鍏ユ墜鏈哄彿");
+        showToast("请输入手机号");
         return;
       }
       if (!Number.isInteger(ticketCount) || ticketCount <= 0) {
-        showToast("璐エ鏁伴噺蹇呴』澶т簬 0");
+        showToast("购票数量必须大于 0");
         return;
       }
 
       submitting = true;
       const originalText = submitButton.textContent;
       submitButton.disabled = true;
-      submitButton.textContent = "鎻愪氦涓?..";
+      submitButton.textContent = "提交?..";
 
       try {
         const result = await api.post(API_ENDPOINTS.passenger.createOrder, {
@@ -3268,12 +2291,12 @@
         });
         const order = result?.data;
         if (!order?.id) {
-          throw new Error("璁㈠崟鍒涘缓鎴愬姛锛屼絾鏈繑鍥炶鍗曞彿");
+          throw new Error("订单创建成功，但未返回订单号");
         }
-        showToast("璁㈠崟宸插垱寤猴紝姝ｅ湪璺宠浆鏀粯椤?");
+        showToast("订单已创建，正在跳转支付页");
         window.location.href = `${ROUTES.passenger.payment}?orderId=${encodeURIComponent(order.id)}`;
       } catch (error) {
-        showToast(error.message || "鍒涘缓璁㈠崟澶辫触");
+        showToast(error.message || "创建订单失败");
         submitButton.disabled = false;
         submitButton.textContent = originalText;
         submitting = false;
@@ -3296,13 +2319,13 @@
 
   function mapUserStatus(status) {
     if (status === "active") {
-      return "姝ｅ父";
+      return "正常";
     }
     if (status === "frozen") {
-      return "鍐荤粨";
+      return "冻结";
     }
     if (status === "disabled") {
-      return "绂佺敤";
+      return "禁用";
     }
     return status || "--";
   }
@@ -3333,20 +2356,20 @@
 
     const renderSummary = (summary) => {
       summaryBox.innerHTML = `
-        <span class="mini-chip">鎬荤敤鎴?${Number(summary?.totalUsers || 0)}</span>
-        <span class="mini-chip">涔樺 ${Number(summary?.passengerCount || 0)}</span>
-        <span class="mini-chip">鍙告満 ${Number(summary?.driverCount || 0)}</span>
-        <span class="mini-chip">绠＄悊鍛?${Number(summary?.adminCount || 0)}</span>
-        <span class="mini-chip">娲昏穬 ${Number(summary?.activeCount || 0)}</span>
+        <span class="mini-chip">总用户 ${Number(summary?.totalUsers || 0)}</span>
+        <span class="mini-chip">乘客 ${Number(summary?.passengerCount || 0)}</span>
+        <span class="mini-chip">司机 ${Number(summary?.driverCount || 0)}</span>
+        <span class="mini-chip">管理员 ${Number(summary?.adminCount || 0)}</span>
+        <span class="mini-chip">活跃 ${Number(summary?.activeCount || 0)}</span>
       `;
     };
 
     const renderList = (users) => {
       if (!users.length) {
-        listBox.innerHTML = `<tr><td colspan="7">鏆傛棤鐢ㄦ埛鏁版嵁</td></tr>`;
+        listBox.innerHTML = `<tr><td colspan="7">暂无用户数据</td></tr>`;
         emptyState.innerHTML = `
-          <strong>鏆傛棤鐢ㄦ埛</strong>
-          <p class="muted">鍚庣褰撳墠杩樻病鏈夊彲灞曠ず鐨勭敤鎴疯褰曘€?/p>
+          <strong>暂无用户</strong>
+          <p class="muted">后端当前还没有可展示的用户记录。</p>
         `;
         return;
       }
@@ -3364,8 +2387,8 @@
       `).join("");
 
       emptyState.innerHTML = `
-        <strong>鐢ㄦ埛鍒楄〃宸插悓姝?/strong>
-        <p class="muted">褰撳墠鍏卞姞杞?${users.length} 鏉＄湡瀹炵敤鎴疯褰曪紝鏀寔缁х画鎵╁睍鎼滅储銆佸喕缁撳拰瑙掕壊璋冩暣鍔熻兘銆?/p>
+        <strong>用户列表已同步</strong>
+        <p class="muted">当前共加载 ${users.length} 条真实用户记录，支持继续扩展搜索、冻结和角色调整功能。</p>
       `;
     };
 
@@ -3378,10 +2401,10 @@
         renderList(Array.isArray(listResult?.data) ? listResult.data : []);
       })
       .catch((error) => {
-        summaryBox.innerHTML = `<span class="mini-chip">鍔犺浇澶辫触</span>`;
-        listBox.innerHTML = `<tr><td colspan="7">鐢ㄦ埛鍒楄〃鍔犺浇澶辫触</td></tr>`;
+        summaryBox.innerHTML = `<span class="mini-chip">加载失败</span>`;
+        listBox.innerHTML = `<tr><td colspan="7">用户列表加载失败</td></tr>`;
         emptyState.innerHTML = `
-          <strong>鐢ㄦ埛鏁版嵁鍔犺浇澶辫触</strong>
+          <strong>用户数据加载失败</strong>
           <p class="muted">${escapeHtml(error.message || "请稍后重试")}</p>
         `;
       });
@@ -3406,9 +2429,9 @@
       const refunded = orders.filter((order) => order?.refundStatus === "refunded").length;
       const rejected = orders.filter((order) => order?.refundStatus === "rejected").length;
       summaryBox.innerHTML = `
-        <span class="mini-chip">寰呭鏍?${requested}</span>
-        <span class="mini-chip">宸查€€娆?${refunded}</span>
-        <span class="mini-chip">宸查┏鍥?${rejected}</span>
+        <span class="mini-chip">待审核 ${requested}</span>
+        <span class="mini-chip">已退款 ${refunded}</span>
+        <span class="mini-chip">已驳回 ${rejected}</span>
       `;
     };
 
@@ -3416,8 +2439,8 @@
       if (!orders.length) {
         listBox.innerHTML = `
           <div class="info-card">
-            <strong>褰撳墠娌℃湁绗﹀悎鏉′欢鐨勮鍗?/strong>
-            <p class="muted">鍙互鍒囨崲閫€娆剧姸鎬佺瓫閫夛紝鎴栬€呯瓑寰呬箻瀹㈡彁浜ゆ柊鐨勯€€娆剧敵璇枫€?/p>
+            <strong>当前没有符合条件的订单</strong>
+            <p class="muted">可以切换退款状态筛选，或等待乘客提交新的退款申请。</p>
           </div>
         `;
         return;
@@ -3428,16 +2451,16 @@
         const user = order?.user || {};
         const canReview = order?.refundStatus === "requested";
         const reviewNote = order?.refundReviewNote
-          ? `<p class="muted">瀹℃牳澶囨敞锛?{escapeHtml(order.refundReviewNote)}</p>`
-          : `<p class="muted">瀹℃牳澶囨敞锛氭殏鏃?/p>`;
+          ? `<p class="muted">审核备注：${escapeHtml(order.refundReviewNote)}</p>`
+          : `<p class="muted">审核备注：暂无</p>`;
 
         return `
           <div class="order-card" data-admin-order-card="${order.id}">
             <div class="order-top">
               <div>
-                <strong>${escapeHtml(order.orderNo || `璁㈠崟 #${order.id}`)}</strong>
+                <strong>${escapeHtml(order.orderNo || `订单 #${order.id}`)}</strong>
                 <div class="list-meta">
-                  <span>${escapeHtml(user.nickname || user.phone || "鏈煡鐢ㄦ埛")}</span>
+                  <span>${escapeHtml(user.nickname || user.phone || "未知用户")}</span>
                   <span>${escapeHtml(`${trip.startCity || "--"} -> ${trip.endCity || "--"}`)}</span>
                 </div>
                 <div class="list-meta">
@@ -3447,7 +2470,7 @@
                   <span>${escapeHtml(formatFullDateTime(order.createdAt))}</span>
                 </div>
                 ${reviewNote}
-                ${order.refundReviewedAt ? `<p class="muted">瀹℃牳鏃堕棿锛?{escapeHtml(formatFullDateTime(order.refundReviewedAt))}</p>` : ""}
+                ${order.refundReviewedAt ? `<p class="muted">审核时间：${escapeHtml(formatFullDateTime(order.refundReviewedAt))}</p>` : ""}
               </div>
               <span class="badge">${escapeHtml(mapRefundStatus(order.refundStatus))}</span>
             </div>
@@ -3473,16 +2496,16 @@
           const reviewNote = String(reviewNoteInput?.value || "").trim();
           const originalText = button.textContent;
           button.disabled = true;
-          button.textContent = "瀹℃牳涓?..";
+          button.textContent = "审核中...";
 
           try {
             await api.post(API_ENDPOINTS.admin.approveRefund, { reviewNote }, { pathParams: { orderId } });
-            showToast("閫€娆惧凡瀹℃牳閫氳繃");
+            showToast("退款已审核通过");
             await reload();
           } catch (error) {
             button.disabled = false;
             button.textContent = originalText;
-            showToast(error.message || "瀹℃牳閫氳繃澶辫触");
+            showToast(error.message || "审核通过失败");
           }
         });
       });
@@ -3497,16 +2520,16 @@
           const reviewNote = String(reviewNoteInput?.value || "").trim();
           const originalText = button.textContent;
           button.disabled = true;
-          button.textContent = "澶勭悊涓?..";
+          button.textContent = "处理中...";
 
           try {
             await api.post(API_ENDPOINTS.admin.rejectRefund, { reviewNote }, { pathParams: { orderId } });
-            showToast("閫€娆剧敵璇峰凡椹冲洖");
+            showToast("退款申请已驳回");
             await reload();
           } catch (error) {
             button.disabled = false;
             button.textContent = originalText;
-            showToast(error.message || "椹冲洖閫€娆惧け璐?");
+            showToast(error.message || "驳回退款失败");
           }
         });
       });
@@ -3522,15 +2545,15 @@
 
     refundStatusInput.addEventListener("change", () => {
       loadOrders().catch((error) => {
-        showToast(error.message || "鍔犺浇璁㈠崟澶辫触");
+        showToast(error.message || "加载订单失败");
       });
     });
 
     loadOrders().catch((error) => {
-      summaryBox.innerHTML = `<span class="mini-chip">鍔犺浇澶辫触</span>`;
+      summaryBox.innerHTML = `<span class="mini-chip">加载失败</span>`;
       listBox.innerHTML = `
         <div class="info-card">
-          <strong>閫€娆捐鍗曞姞杞藉け璐?/strong>
+          <strong>退款订单加载失败</strong>
           <p class="muted">${escapeHtml(error.message || "请稍后重试。")}</p>
         </div>
       `;
@@ -3538,295 +2561,11 @@
   }
 
   function initOrdersPage() {
-    if (getCurrentFileName() !== ROUTES.passenger.orders) {
-      return;
-    }
-
-    const summaryBox = document.querySelector("[data-order-summary]");
-    const listBox = document.querySelector("[data-order-list]");
-    if (!summaryBox || !listBox) {
-      return;
-    }
-
-    summaryBox.style.display = "none";
-    summaryBox.innerHTML = "";
-
-    api.get(API_ENDPOINTS.passenger.myOrders)
-      .then((result) => {
-        const orders = Array.isArray(result?.data) ? result.data : [];
-
-        if (!orders.length) {
-          listBox.innerHTML = `
-            <div class="info-card">
-              <strong>鏆傛棤璁㈠崟</strong>
-              <p class="muted">褰撳墠璐﹀彿杩樻病鏈変换浣曡鍗曡褰曘€?/p>
-            </div>
-          `;
-          return;
-        }
-
-        const pendingPaymentCount = orders.filter((order) => order?.orderStatus === "pending_payment" || order?.payStatus === "unpaid").length;
-        const pendingDepartureCount = orders.filter((order) => order?.orderStatus === "pending_verification").length;
-        const completedCount = orders.filter((order) => order?.orderStatus === "completed").length;
-
-        summaryBox.style.display = "";
-        summaryBox.innerHTML = `
-          <span class="mini-chip">寰呮敮浠?${pendingPaymentCount}</span>
-          <span class="mini-chip">寰呭嚭鍙?${pendingDepartureCount}</span>
-          <span class="mini-chip">宸插畬鎴?${completedCount}</span>
-        `;
-
-        listBox.innerHTML = orders.map((order) => {
-          const trip = order?.trip || null;
-          const route = trip ? `${trip.startCity} -> ${trip.endCity}` : "";
-          const departureTime = trip?.departureTime ? formatFullDateTime(trip.departureTime) : "";
-          const statusText = mapOrderStatus(order?.orderStatus, order?.payStatus);
-          const refundTag = order?.refundStatus && order.refundStatus !== "none"
-            ? `<span class="tag">${escapeHtml(mapRefundStatus(order.refundStatus))}</span>`
-            : "";
-          const reviewNote = order?.refundReviewNote
-            ? `<p class="muted">瀹℃牳澶囨敞锛?{escapeHtml(order.refundReviewNote)}</p>`
-            : "";
-          const reviewedAt = order?.refundReviewedAt
-            ? `<p class="muted">瀹℃牳鏃堕棿锛?{escapeHtml(formatFullDateTime(order.refundReviewedAt))}</p>`
-            : "";
-
-          const primaryAction = statusText === "待支付"
-            ? `<a class="button button-primary" href="${ROUTES.passenger.payment}?orderId=${order.id}">去支付</a>`
-            : `<a class="button button-primary" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">鏌ョ湅璇︽儏</a>`;
-
-          const secondaryAction = statusText === "待支付"
-            ? `<a class="button button-secondary" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">订单详情</a>`
-            : `<a class="button button-ghost" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">鏌ョ湅鐢靛瓙绁?/a>`;
-
-          return `
-            <div class="order-card">
-              <div class="order-top">
-                <div>
-                  <strong>${escapeHtml(order.orderNo || `璁㈠崟 #${order.id}`)}</strong>
-                  <div class="list-meta">
-                    ${route ? `<span>${escapeHtml(route)}</span>` : ""}
-                    ${departureTime ? `<span>${escapeHtml(departureTime)}</span>` : ""}
-                    ${refundTag}
-                  </div>
-                  ${reviewNote}
-                  ${reviewedAt}
-                </div>
-                <div class="price-pill">${escapeHtml(formatMoneyFromCent(order.amount))} <small>${escapeHtml(statusText)}</small></div>
-              </div>
-              <div class="button-row">
-                ${primaryAction}
-                ${secondaryAction}
-              </div>
-            </div>
-          `;
-        }).join("");
-      })
-      .catch((error) => {
-        summaryBox.style.display = "none";
-        summaryBox.innerHTML = "";
-        listBox.innerHTML = `
-          <div class="info-card">
-            <strong>璁㈠崟鍔犺浇澶辫触</strong>
-            <p class="muted">${escapeHtml(error.message || "请稍后再试。")}</p>
-          </div>
-        `;
-      });
+    return;
   }
 
   function initOrderDetailPage() {
-    if (getCurrentFileName() !== ROUTES.passenger.orderDetail) {
-      return;
-    }
-
-    const orderId = getQueryParam("orderId");
-    if (!orderId) {
-      return;
-    }
-
-    const auth = readAuth() || {};
-    const title = document.querySelector("[data-order-detail-title]");
-    const statusBox = document.querySelector("[data-order-detail-status]");
-    const timelineBox = document.querySelector("[data-order-detail-timeline]");
-    const metaBox = document.querySelector("[data-order-detail-meta]");
-    const pricingBox = document.querySelector("[data-order-detail-pricing]");
-    const actionsBox = document.querySelector("[data-order-detail-actions]");
-
-    api.get(API_ENDPOINTS.passenger.orderDetail, undefined, { pathParams: { orderId } })
-      .then((result) => {
-        const order = result?.data;
-        if (!order) {
-          throw new Error("璁㈠崟涓嶅瓨鍦?");
-        }
-
-        const trip = order.trip || {};
-        const statusText = mapOrderStatus(order.orderStatus, order.payStatus);
-        const routeTitle = trip.startCity && trip.endCity ? `${trip.startCity} -> ${trip.endCity}` : "";
-        const ticketCount = Number(order.ticketCount || 0);
-        const unitPrice = ticketCount > 0 ? Math.round(Number(order.amount || 0) / ticketCount) : Number(order.amount || 0);
-        const stops = Array.isArray(trip.stops) ? trip.stops : [];
-        const refundReviewNote = order.refundReviewNote || "";
-        const refundReviewedAt = order.refundReviewedAt ? formatFullDateTime(order.refundReviewedAt) : "";
-
-        if (title) {
-          title.textContent = order.orderNo || "璁㈠崟璇︽儏";
-        }
-
-        if (statusBox) {
-          statusBox.textContent = statusText;
-        }
-
-        if (timelineBox) {
-          const stopMarkup = stops.map((stop) => `
-            <div class="timeline-item">
-              <span class="timeline-dot"></span>
-              <strong>${escapeHtml(stop.stopName || "")}</strong>
-              <p class="muted">${escapeHtml(formatFullDateTime(stop.planArrivalTime || stop.planDepartureTime || trip.departureTime))}</p>
-            </div>
-          `).join("");
-
-          timelineBox.innerHTML = `
-            <div class="timeline-item">
-              <span class="timeline-dot"></span>
-              <strong>${escapeHtml(trip.startCity || "")}</strong>
-              <p class="muted">${escapeHtml(formatFullDateTime(trip.departureTime))}</p>
-            </div>
-            ${stopMarkup}
-            <div class="timeline-item">
-              <span class="timeline-dot"></span>
-              <strong>${escapeHtml(trip.endCity || "")}</strong>
-              <p class="muted">${escapeHtml(formatFullDateTime(trip.arrivalTime))}</p>
-            </div>
-          `;
-        }
-
-        if (metaBox) {
-          metaBox.innerHTML = `
-            <div class="list-item">
-              <strong>璺嚎淇℃伅</strong>
-              <div class="list-meta"><span>${escapeHtml(routeTitle)}</span><span>${escapeHtml(trip.vehicleType || "car")}</span></div>
-            </div>
-            <div class="list-item">
-              <strong>涔樿溅浜?/strong>
-              <div class="list-meta"><span>${escapeHtml(auth.nickname || auth.phone || "褰撳墠璐﹀彿")}</span><span>${escapeHtml(auth.phone || "")}</span></div>
-            </div>
-            <div class="list-item">
-              <strong>搴т綅涓庡紶鏁?/strong>
-              <div class="list-meta"><span>${escapeHtml(mapSeatType(order.seatType))}</span><span>${ticketCount} 寮?/span></div>
-            </div>
-            <div class="list-item">
-              <strong>鏀粯涓庨€€娆?/strong>
-              <div class="list-meta"><span>${escapeHtml(order.payStatus || "--")}</span><span>${escapeHtml(mapRefundStatus(order.refundStatus))}</span></div>
-            </div>
-            <div class="list-item">
-              <strong>閫€娆惧鏍稿娉?/strong>
-              <div class="list-meta"><span>${escapeHtml(refundReviewNote || "鏆傛棤")}</span><span>${escapeHtml(refundReviewedAt || "--")}</span></div>
-            </div>
-          `;
-        }
-
-        if (pricingBox) {
-          pricingBox.innerHTML = `
-            <div class="pricing-row"><span>鍗曚环</span><strong>${escapeHtml(formatMoneyFromCent(unitPrice))}</strong></div>
-            <div class="pricing-row"><span>鏁伴噺</span><strong>${ticketCount} 寮?/strong></div>
-            <div class="pricing-row"><span>閫€娆剧姸鎬?/span><strong>${escapeHtml(mapRefundStatus(order.refundStatus))}</strong></div>
-            <div class="pricing-row pricing-total"><span>瀹炰粯</span><strong>${escapeHtml(formatMoneyFromCent(order.amount))}</strong></div>
-          `;
-        }
-
-        if (actionsBox) {
-          const canContinuePay = order.orderStatus === "pending_payment" || order.payStatus === "unpaid";
-          const canCancel = order.orderStatus === "pending_payment";
-          const canRequestRefund =
-            (order.orderStatus === "pending_verification" || order.orderStatus === "completed") &&
-            order.payStatus === "paid" &&
-            order.orderStatus !== "cancelled" &&
-            (order.refundStatus === "none" || order.refundStatus === "rejected");
-
-          const primaryAction = canContinuePay
-            ? `<a class="button button-primary" href="${ROUTES.passenger.payment}?orderId=${order.id}">缁х画鏀粯</a>`
-            : `<button class="button button-primary" type="button" data-toast="鐢靛瓙绁ㄥ姛鑳藉凡棰勭暀锛屽悗缁彲缁х画鎺ヤ簩缁寸爜鎺ュ彛">鏌ョ湅鐢靛瓙绁?/button>`;
-
-          const cancelAction = canCancel
-            ? `<button class="button button-ghost" type="button" data-order-cancel>鍙栨秷璁㈠崟</button>`
-            : "";
-
-          const refundAction = order.refundStatus === "requested"
-            ? `<button class="button button-ghost" type="button" disabled>閫€娆惧鐞嗕腑</button>`
-            : canRequestRefund
-              ? `<button class="button button-ghost" type="button" data-order-refund>鐢宠閫€娆?/button>`
-              : "";
-
-          const reviewInfo = order.refundStatus !== "none"
-            ? `<div class="info-card"><strong>閫€娆剧粨鏋?/strong><p class="muted">${escapeHtml(mapRefundStatus(order.refundStatus))}</p><p class="muted">瀹℃牳澶囨敞锛?{escapeHtml(refundReviewNote || "鏆傛棤")}</p><p class="muted">瀹℃牳鏃堕棿锛?{escapeHtml(refundReviewedAt || "--")}</p></div>`
-            : "";
-
-          actionsBox.innerHTML = `
-            ${primaryAction}
-            ${cancelAction}
-            ${refundAction}
-            <a class="button button-secondary" href="${ROUTES.passenger.orders}">杩斿洖璁㈠崟鍒楄〃</a>
-            ${reviewInfo}
-          `;
-          initToastTriggers();
-
-          const cancelButton = actionsBox.querySelector("[data-order-cancel]");
-          if (cancelButton) {
-            cancelButton.addEventListener("click", async () => {
-              if (!window.confirm("确认取消这个订单吗？")) {
-                return;
-              }
-
-              try {
-                cancelButton.disabled = true;
-                cancelButton.textContent = "鍙栨秷涓?..";
-                await api.post(API_ENDPOINTS.passenger.cancelOrder, {}, { pathParams: { orderId } });
-                showToast("璁㈠崟宸插彇娑?");
-                window.setTimeout(() => window.location.reload(), 300);
-              } catch (error) {
-                cancelButton.disabled = false;
-                cancelButton.textContent = "鍙栨秷璁㈠崟";
-                showToast(error.message || "鍙栨秷璁㈠崟澶辫触");
-              }
-            });
-          }
-
-          const refundButton = actionsBox.querySelector("[data-order-refund]");
-          if (refundButton) {
-            refundButton.addEventListener("click", async () => {
-              if (!window.confirm("确认提交退款申请吗？")) {
-                return;
-              }
-
-              try {
-                refundButton.disabled = true;
-                refundButton.textContent = "鎻愪氦涓?..";
-                await api.post(API_ENDPOINTS.passenger.refundOrder, {}, { pathParams: { orderId } });
-                showToast("閫€娆剧敵璇峰凡鎻愪氦");
-                window.setTimeout(() => window.location.reload(), 300);
-              } catch (error) {
-                refundButton.disabled = false;
-                refundButton.textContent = "鐢宠閫€娆?";
-                showToast(error.message || "閫€娆剧敵璇峰け璐?");
-              }
-            });
-          }
-        }
-      })
-      .catch((error) => {
-        if (title) {
-          title.textContent = error.message || "璁㈠崟鍔犺浇澶辫触";
-        }
-        if (timelineBox) {
-          timelineBox.innerHTML = `
-            <div class="timeline-item">
-              <span class="timeline-dot"></span>
-              <strong>鍔犺浇澶辫触</strong>
-              <p class="muted">${escapeHtml(error.message || "请稍后再试。")}</p>
-            </div>
-          `;
-        }
-      });
+    return;
   }
 
   function initAdminDashboardPage() {
@@ -3843,7 +2582,7 @@
 
     const setLoadError = (message) => {
       if (summaryBox) {
-        summaryBox.innerHTML = `<span class="mini-chip">鍔犺浇澶辫触</span>`;
+        summaryBox.innerHTML = `<span class="mini-chip">加载失败</span>`;
       }
       if (pendingBox) {
         pendingBox.textContent = "--";
@@ -3855,11 +2594,11 @@
         rejectedBox.textContent = "--";
       }
       if (pendingNote) {
-        pendingNote.textContent = "璇风◢鍚庨噸璇?";
+        pendingNote.textContent = "请◢后重?";
       }
       if (emptyState) {
         emptyState.innerHTML = `
-          <strong>缁熻鍔犺浇澶辫触</strong>
+          <strong>统计加载失败</strong>
           <p class="muted">${escapeHtml(message || "请稍后重试")}</p>
         `;
       }
@@ -3874,9 +2613,9 @@
 
         if (summaryBox) {
           summaryBox.innerHTML = `
-            <span class="mini-chip">寰呭鏍?${pendingRefundCount}</span>
-            <span class="mini-chip">宸查€€娆?${refundedCount}</span>
-            <span class="mini-chip">宸查┏鍥?${rejectedRefundCount}</span>
+            <span class="mini-chip">待审核 ${pendingRefundCount}</span>
+            <span class="mini-chip">已退款 ${refundedCount}</span>
+            <span class="mini-chip">已┏?${rejectedRefundCount}</span>
           `;
         }
         if (pendingBox) {
@@ -3889,16 +2628,16 @@
           rejectedBox.textContent = String(rejectedRefundCount);
         }
         if (pendingNote) {
-          pendingNote.textContent = pendingRefundCount > 0 ? `褰撳墠杩樻湁 ${pendingRefundCount} 绗旈€€娆惧緟澶勭悊` : "褰撳墠娌℃湁寰呭鏍搁€€娆?";
+          pendingNote.textContent = pendingRefundCount > 0 ? `当前还有 ${pendingRefundCount} 笔退款待处理` : "当前没有待审核退款";
         }
         if (emptyState) {
           emptyState.innerHTML = pendingRefundCount > 0
-            ? `<strong>閫€娆惧緟鍔炴彁閱?/strong><p class="muted">寤鸿浼樺厛杩涘叆閫€娆惧鏍搁〉锛岄伩鍏嶄箻瀹㈢瓑寰呰繃涔呫€?/p>`
-            : `<strong>鏆傛棤閫€娆惧緟鍔?/strong><p class="muted">褰撳墠娌℃湁寰呭鏍哥殑閫€娆剧敵璇枫€?/p>`;
+            ? `<strong>退款待办提醒</strong><p class="muted">建议优先进入退款审核页，避免乘客等待过久。</p>`
+            : `<strong>暂无退款待办</strong><p class="muted">当前没有待审核的退款申请。</p>`;
         }
       })
       .catch((error) => {
-        setLoadError(error.message || "缁熻鍔犺浇澶辫触");
+        setLoadError(error.message || "统计加载失败");
       });
   }
 
@@ -3924,7 +2663,7 @@
     }
 
     const setLoadError = (message) => {
-      summaryBox.innerHTML = `<span class="mini-chip">鍔犺浇澶辫触</span>`;
+      summaryBox.innerHTML = `<span class="mini-chip">加载失败</span>`;
       if (totalUsersBox) totalUsersBox.textContent = "--";
       if (activeUsersBox) activeUsersBox.textContent = "--";
       if (pendingBox) pendingBox.textContent = "--";
@@ -3933,9 +2672,9 @@
       if (passengerCountBox) passengerCountBox.textContent = "--";
       if (driverCountBox) driverCountBox.textContent = "--";
       if (adminCountBox) adminCountBox.textContent = "--";
-      if (pendingNote) pendingNote.textContent = "璇风◢鍚庨噸璇?";
+      if (pendingNote) pendingNote.textContent = "请◢后重?";
       emptyState.innerHTML = `
-        <strong>鍚庡彴缁熻鍔犺浇澶辫触</strong>
+        <strong>后台统计加载失败</strong>
         <p class="muted">${escapeHtml(message || "请稍后重试")}</p>
       `;
     };
@@ -3957,9 +2696,9 @@
         const adminCount = Number(userSummary.adminCount || 0);
 
         summaryBox.innerHTML = `
-          <span class="mini-chip">鎬荤敤鎴?${totalUsers}</span>
-          <span class="mini-chip">寰呭鏍搁€€娆?${pendingRefundCount}</span>
-          <span class="mini-chip">娲昏穬鐢ㄦ埛 ${activeUsers}</span>
+          <span class="mini-chip">总用户 ${totalUsers}</span>
+          <span class="mini-chip">待审核退款 ${pendingRefundCount}</span>
+          <span class="mini-chip">活跃ㄦ埛 ${activeUsers}</span>
         `;
         if (totalUsersBox) totalUsersBox.textContent = String(totalUsers);
         if (activeUsersBox) activeUsersBox.textContent = String(activeUsers);
@@ -3971,15 +2710,15 @@
         if (adminCountBox) adminCountBox.textContent = String(adminCount);
         if (pendingNote) {
           pendingNote.textContent = pendingRefundCount > 0
-            ? `褰撳墠杩樻湁 ${pendingRefundCount} 绗旈€€娆惧緟澶勭悊`
-            : "褰撳墠娌℃湁寰呭鏍搁€€娆?";
+            ? `当前还有 ${pendingRefundCount} 笔退款待处理`
+            : "当前没有待审核退款";
         }
         emptyState.innerHTML = pendingRefundCount > 0
-          ? `<strong>閫€娆惧緟鍔炴彁閱?/strong><p class="muted">寤鸿浼樺厛杩涘叆閫€娆惧鏍搁〉锛岄伩鍏嶄箻瀹㈢瓑寰呰繃涔呫€?/p>`
-          : `<strong>閫€娆鹃槦鍒楁甯?/strong><p class="muted">褰撳墠娌℃湁寰呭鏍搁€€娆撅紝鍙互杞幓鏌ョ湅鐢ㄦ埛鍒楄〃鎴栧叾浠栧悗鍙版ā鍧椼€?/p>`;
+          ? `<strong>退款待办提醒</strong><p class="muted">建议优先进入退款审核页，避免乘客等待过久。</p>`
+          : `<strong>退款队列正常</strong><p class="muted">当前没有待审核退款，可以转去查看用户列表或其他后台模块。</p>`;
       })
       .catch((error) => {
-        setLoadError(error.message || "缁熻鍔犺浇澶辫触");
+        setLoadError(error.message || "统计加载失败");
       });
   }
 
@@ -4024,7 +2763,7 @@
   function getDisplayedOrderStatus(order) {
     const expireMeta = getOrderPaymentExpireMeta(order);
     if ((order?.orderStatus === "pending_payment" || order?.payStatus === "unpaid") && expireMeta.expired) {
-      return "鏀粯宸茶秴鏃?";
+      return "支付已超?";
     }
     return mapOrderStatus(order?.orderStatus, order?.payStatus);
   }
@@ -4050,8 +2789,8 @@
         if (!orders.length) {
           listBox.innerHTML = `
             <div class="info-card">
-              <strong>鏆傛棤璁㈠崟</strong>
-              <p class="muted">褰撳墠璐﹀彿杩樻病鏈変换浣曡鍗曡褰曘€?/p>
+              <strong>暂无订单</strong>
+              <p class="muted">当前账号还没有任何订单记录。</p>
             </div>
           `;
           return;
@@ -4063,9 +2802,9 @@
 
         summaryBox.style.display = "";
         summaryBox.innerHTML = `
-          <span class="mini-chip">寰呮敮浠?${pendingPaymentCount}</span>
-          <span class="mini-chip">寰呭嚭鍙?${pendingDepartureCount}</span>
-          <span class="mini-chip">宸插畬鎴?${completedCount}</span>
+          <span class="mini-chip">待支付 ${pendingPaymentCount}</span>
+          <span class="mini-chip">待出行 ${pendingDepartureCount}</span>
+          <span class="mini-chip">已完成 ${completedCount}</span>
         `;
 
         listBox.innerHTML = orders.map((order) => {
@@ -4087,10 +2826,10 @@
             ? `<span class="tag">${escapeHtml(mapRefundStatus(order.refundStatus))}</span>`
             : "";
           const expireTag = expireMeta.expired && (order?.orderStatus === "pending_payment" || order?.payStatus === "unpaid")
-            ? `<span class="tag">鏀粯宸茶秴鏃?/span>`
+            ? `<span class="tag">支付已超时</span>`
             : "";
           const reviewNote = order?.refundReviewNote
-            ? `<p class="muted">瀹℃牳澶囨敞锛?{escapeHtml(order.refundReviewNote)}</p>`
+            ? `<p class="muted">审核备注：${escapeHtml(order.refundReviewNote)}</p>`
             : "";
           const reviewedAt = order?.refundReviewedAt
             ? `<p class="muted">审核时间：${escapeHtml(formatFullDateTime(order.refundReviewedAt))}</p>`
@@ -4112,7 +2851,7 @@
             <div class="order-card">
               <div class="order-top">
                 <div>
-                  <strong>${escapeHtml(order.orderNo || `璁㈠崟 #${order.id}`)}</strong>
+                  <strong>${escapeHtml(order.orderNo || `订单 #${order.id}`)}</strong>
                   <div class="list-meta">
                     ${route ? `<span>${escapeHtml(route)}</span>` : ""}
                     ${departureTime ? `<span>${escapeHtml(departureTime)}</span>` : ""}
@@ -4139,7 +2878,7 @@
         summaryBox.innerHTML = "";
         listBox.innerHTML = `
           <div class="info-card">
-            <strong>璁㈠崟鍔犺浇澶辫触</strong>
+            <strong>订单加载失败</strong>
             <p class="muted">${escapeHtml(error.message || "请稍后再试。")}</p>
           </div>
         `;
@@ -4168,7 +2907,7 @@
       .then((result) => {
         const order = result?.data;
         if (!order) {
-          throw new Error("璁㈠崟涓嶅瓨鍦?");
+          throw new Error("订单不存在");
         }
 
         const trip = order.trip || {};
@@ -4183,7 +2922,7 @@
         const expiredPendingPayment = (order.orderStatus === "pending_payment" || order.payStatus === "unpaid") && expireMeta.expired;
 
         if (title) {
-          title.textContent = order.orderNo || "璁㈠崟璇︽儏";
+          title.textContent = order.orderNo || "订单详情";
         }
         if (statusBox) {
           statusBox.textContent = statusText;
@@ -4216,16 +2955,16 @@
         if (metaBox) {
           metaBox.innerHTML = `
             <div class="list-item">
-              <strong>璺嚎淇℃伅</strong>
+              <strong>路线信息</strong>
               <div class="list-meta"><span>${escapeHtml(routeTitle)}</span><span>${escapeHtml(trip.vehicleType || "car")}</span></div>
             </div>
             <div class="list-item">
-              <strong>涔樿溅浜?/strong>
-              <div class="list-meta"><span>${escapeHtml(auth.nickname || auth.phone || "褰撳墠璐﹀彿")}</span><span>${escapeHtml(auth.phone || "")}</span></div>
+              <strong>乘车人</strong>
+              <div class="list-meta"><span>${escapeHtml(auth.nickname || auth.phone || "当前账号")}</span><span>${escapeHtml(auth.phone || "")}</span></div>
             </div>
             <div class="list-item">
-              <strong>搴т綅涓庡紶鏁?/strong>
-              <div class="list-meta"><span>${escapeHtml(mapSeatType(order.seatType))}</span><span>${ticketCount} 寮?/span></div>
+              <strong>座位与张数</strong>
+              <div class="list-meta"><span>${escapeHtml(mapSeatType(order.seatType))}</span><span>${ticketCount} 张</span></div>
             </div>
             <div class="list-item">
               <strong>支付截止时间</strong>
@@ -4262,15 +3001,15 @@
             (order.refundStatus === "none" || order.refundStatus === "rejected");
 
           const primaryAction = canContinuePay
-            ? `<a class="button button-primary" href="${ROUTES.passenger.payment}?orderId=${order.id}">缁х画鏀粯</a>`
+            ? `<a class="button button-primary" href="${ROUTES.passenger.payment}?orderId=${order.id}">继续支付</a>`
             : `<button class="button button-primary" type="button" ${expiredPendingPayment ? "disabled" : "data-electronic-ticket"}>${expiredPendingPayment ? "支付已超时" : "查看电子票"}</button>`;
 
           const cancelAction = canCancel
-            ? `<button class="button button-ghost" type="button" data-order-cancel>鍙栨秷璁㈠崟</button>`
+            ? `<button class="button button-ghost" type="button" data-order-cancel>取消订单</button>`
             : "";
 
           const refundAction = order.refundStatus === "requested"
-            ? `<button class="button button-ghost" type="button" disabled>閫€娆惧鐞嗕腑</button>`
+            ? `<button class="button button-ghost" type="button" disabled>退款处理中</button>`
             : canRequestRefund
               ? `<button class="button button-ghost" type="button" data-order-refund>${order.refundStatus === "rejected" ? "重新申请退款" : "申请退款"}</button>`
               : "";
@@ -4286,7 +3025,7 @@
             ${primaryAction}
             ${cancelAction}
             ${refundAction}
-            <a class="button button-secondary" href="${ROUTES.passenger.orders}">杩斿洖璁㈠崟鍒楄〃</a>
+            <a class="button button-secondary" href="${ROUTES.passenger.orders}">返回订单列表</a>
             <div class="info-card" data-electronic-ticket-box style="display:none"></div>
             ${expireInfo}
             ${reviewInfo}
@@ -4328,14 +3067,14 @@
 
               try {
                 cancelButton.disabled = true;
-                cancelButton.textContent = "鍙栨秷涓?..";
+                cancelButton.textContent = "取消中...";
                 await api.post(API_ENDPOINTS.passenger.cancelOrder, {}, { pathParams: { orderId } });
-                showToast("璁㈠崟宸插彇娑?");
+                showToast("订单已取消");
                 window.setTimeout(() => window.location.reload(), 300);
               } catch (error) {
                 cancelButton.disabled = false;
-                cancelButton.textContent = "鍙栨秷璁㈠崟";
-                showToast(error.message || "鍙栨秷璁㈠崟澶辫触");
+                cancelButton.textContent = "取消订单";
+                showToast(error.message || "取消订单失败");
               }
             });
           }
@@ -4350,14 +3089,14 @@
 
               try {
                 refundButton.disabled = true;
-                refundButton.textContent = "鎻愪氦涓?..";
+                refundButton.textContent = "提交?..";
                 await api.post(API_ENDPOINTS.passenger.refundOrder, {}, { pathParams: { orderId } });
-                showToast("閫€娆剧敵璇峰凡鎻愪氦");
+                showToast("退款申请已提交");
                 window.setTimeout(() => window.location.reload(), 300);
               } catch (error) {
                 refundButton.disabled = false;
                 refundButton.textContent = defaultRefundText;
-                showToast(error.message || "閫€娆剧敵璇峰け璐?");
+                showToast(error.message || "退款申请失败");
               }
             });
           }
@@ -4365,13 +3104,13 @@
       })
       .catch((error) => {
         if (title) {
-          title.textContent = error.message || "璁㈠崟鍔犺浇澶辫触";
+          title.textContent = error.message || "订单加载失败";
         }
         if (timelineBox) {
           timelineBox.innerHTML = `
             <div class="timeline-item">
               <span class="timeline-dot"></span>
-              <strong>鍔犺浇澶辫触</strong>
+              <strong>加载失败</strong>
               <p class="muted">${escapeHtml(error.message || "请稍后再试。")}</p>
             </div>
           `;
@@ -4411,37 +3150,37 @@
 
     const renderMissingOrderState = () => {
       if (title) {
-        title.textContent = "缂哄皯璁㈠崟鍙?";
+        title.textContent = "缺少订单";
       }
       if (lede) {
-        lede.textContent = "褰撳墠鏀粯椤垫病鏈夋敹鍒?orderId锛岃浠庤鍗曡鎯呴〉鎴栬鍗曞垪琛ㄩ噸鏂拌繘鍏ャ€?";
+        lede.textContent = "当前支付页没有收到 orderId，请从订单详情页或订单列表重新进入。";
       }
       if (summaryBox) {
         summaryBox.innerHTML = `
           <div class="list-item">
-            <strong>鏃犳硶鍙戣捣鏀粯</strong>
-            <div class="list-meta"><span>鍘熷洜</span><span>URL 涓己灏?orderId</span></div>
+            <strong>无法发起支付</strong>
+            <div class="list-meta"><span>原因</span><span>URL 中缺少 orderId</span></div>
           </div>
         `;
       }
       if (orderBox) {
         orderBox.innerHTML = `
           <div class="list-item">
-            <strong>寤鸿鎿嶄綔</strong>
-            <div class="list-meta"><span>杩斿洖璁㈠崟璇︽儏椤?/span><span>閲嶆柊鐐瑰嚮鏀粯</span></div>
+            <strong>建议操作</strong>
+            <div class="list-meta"><span>返回订单详情页</span><span>重新点击支付</span></div>
           </div>
         `;
       }
       if (amountBox) {
         amountBox.innerHTML = `
-          <div class="pricing-row"><span>璁㈠崟閲戦</span><strong>--</strong></div>
-          <div class="pricing-row"><span>鏀粯鐘舵€?/span><strong>--</strong></div>
-          <div class="pricing-row pricing-total"><span>璁㈠崟鐘舵€?/span><strong>--</strong></div>
+          <div class="pricing-row"><span>订单金额</span><strong>--</strong></div>
+          <div class="pricing-row"><span>支付状态</span><strong>--</strong></div>
+          <div class="pricing-row pricing-total"><span>订单状态</span><strong>--</strong></div>
         `;
       }
       if (actionsBox) {
         actionsBox.innerHTML = `
-          <a class="button button-primary" href="${ROUTES.passenger.orders}">杩斿洖璁㈠崟鍒楄〃</a>
+          <a class="button button-primary" href="${ROUTES.passenger.orders}">返回订单列表</a>
         `;
       }
     };
@@ -4466,7 +3205,7 @@
           if (payment?.status === "paid") {
             stopPolling();
             stopCountdown();
-            showToast("鏀粯鎴愬姛");
+            showToast("支付成功");
             window.setTimeout(() => {
               redirectTo(`${ROUTES.passenger.orderDetail}?orderId=${orderId}`);
             }, 300);
@@ -4533,7 +3272,7 @@
       if (orderBox) {
         orderBox.innerHTML = `
           <div class="list-item">
-            <strong>${escapeHtml(order.orderNo || `璁㈠崟 #${order.id}`)}</strong>
+            <strong>${escapeHtml(order.orderNo || `订单 #${order.id}`)}</strong>
             <div class="list-meta"><span>${escapeHtml(`${trip.startCity || "--"} -> ${trip.endCity || "--"}`)}</span><span>${escapeHtml(formatFullDateTime(trip.departureTime))}</span></div>
           </div>
         `;
@@ -4541,10 +3280,10 @@
 
       if (amountBox) {
         amountBox.innerHTML = `
-          <div class="pricing-row"><span>璁㈠崟閲戦</span><strong>${escapeHtml(formatMoneyFromCent(order.amount))}</strong></div>
-          <div class="pricing-row"><span>鏀粯鐘舵€?/span><strong>${escapeHtml(payment?.status || order.payStatus || "--")}</strong></div>
-          <div class="pricing-row"><span>鏀粯鎴</span><strong>${escapeHtml(expireMeta.formattedTime)}</strong></div>
-          <div class="pricing-row pricing-total"><span>璁㈠崟鐘舵€?/span><strong>${escapeHtml(displayedStatus)}</strong></div>
+          <div class="pricing-row"><span>订单金额</span><strong>${escapeHtml(formatMoneyFromCent(order.amount))}</strong></div>
+          <div class="pricing-row"><span>支付状态</span><strong>${escapeHtml(payment?.status || order.payStatus || "--")}</strong></div>
+          <div class="pricing-row"><span>支付截止</span><strong>${escapeHtml(expireMeta.formattedTime)}</strong></div>
+          <div class="pricing-row pricing-total"><span>订单状态</span><strong>${escapeHtml(displayedStatus)}</strong></div>
         `;
       }
 
@@ -4554,8 +3293,8 @@
 
       if (order.payStatus === "paid") {
         actionsBox.innerHTML = `
-          <a class="button button-primary" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">鏌ョ湅璁㈠崟璇︽儏</a>
-          <a class="button button-secondary" href="${ROUTES.passenger.orders}">杩斿洖璁㈠崟鍒楄〃</a>
+          <a class="button button-primary" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">查看订单详情</a>
+          <a class="button button-secondary" href="${ROUTES.passenger.orders}">返回订单列表</a>
         `;
         return;
       }
@@ -4571,8 +3310,8 @@
 
       actionsBox.innerHTML = `
         <button class="button button-primary" type="button" data-payment-create>${payment ? "继续支付" : "创建支付单"}</button>
-        <button class="button button-ghost" type="button" data-payment-success ${payment ? "" : "disabled"}>妯℃嫙鏀粯鎴愬姛</button>
-        <a class="button button-secondary" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">鏌ョ湅璁㈠崟璇︽儏</a>
+        <button class="button button-ghost" type="button" data-payment-success ${payment ? "" : "disabled"}>模拟支付成功</button>
+        <a class="button button-secondary" href="${ROUTES.passenger.orderDetail}?orderId=${order.id}">查看订单详情</a>
       `;
 
       const createButton = actionsBox.querySelector("[data-payment-create]");
@@ -4606,26 +3345,26 @@
         successButton.addEventListener("click", async () => {
           const targetPaymentId = currentPaymentId || String(payment?.id || "");
           if (!targetPaymentId) {
-            showToast("璇峰厛鍒涘缓鏀粯鍗?");
+            showToast("请先创建支付?");
             return;
           }
 
           try {
             successButton.disabled = true;
-            successButton.textContent = "鏀粯涓?..";
+            successButton.textContent = "支付?..";
             await api.post(API_ENDPOINTS.passenger.mockPaymentSuccess, {}, {
               pathParams: { paymentId: targetPaymentId },
             });
             stopPolling();
             stopCountdown();
-            showToast("鏀粯鎴愬姛");
+            showToast("支付成功");
             window.setTimeout(() => {
               redirectTo(`${ROUTES.passenger.orderDetail}?orderId=${order.id}`);
             }, 300);
           } catch (error) {
             successButton.disabled = false;
-            successButton.textContent = "妯℃嫙鏀粯鎴愬姛";
-            showToast(error.message || "鏀粯澶辫触");
+            successButton.textContent = "模拟支付成功";
+            showToast(error.message || "支付失败");
           }
         });
       }
@@ -4637,7 +3376,7 @@
       });
       const order = orderResult?.data;
       if (!order) {
-        throw new Error("璁㈠崟涓嶅瓨鍦?");
+        throw new Error("订单不存在");
       }
 
       let payment = null;
@@ -4664,15 +3403,15 @@
       stopCountdown();
       stopPolling();
       if (title) {
-        title.textContent = "鏀粯淇℃伅鍔犺浇澶辫触";
+        title.textContent = "支付信息加载失败";
       }
       if (lede) {
-        lede.textContent = error.message || "璇风◢鍚庡啀璇?";
+        lede.textContent = error.message || "请稍后再试";
       }
       if (actionsBox) {
         actionsBox.innerHTML = `
-          <a class="button button-primary" href="${ROUTES.passenger.orderDetail}?orderId=${orderId}">杩斿洖璁㈠崟璇︽儏</a>
-          <a class="button button-secondary" href="${ROUTES.passenger.orders}">杩斿洖璁㈠崟鍒楄〃</a>
+          <a class="button button-primary" href="${ROUTES.passenger.orderDetail}?orderId=${orderId}">返回订单详情</a>
+          <a class="button button-secondary" href="${ROUTES.passenger.orders}">返回订单列表</a>
         `;
       }
     });
@@ -4695,8 +3434,8 @@
       if (!notifications.length) {
         listBox.innerHTML = `
           <div class="info-card">
-            <strong>鏆傛棤绔欏唴鎻愰啋</strong>
-            <p class="muted">褰撳墠杩樻病鏈夋柊鐨勮鍗曟垨閫€娆鹃€氱煡銆?/p>
+            <strong>暂无站内提醒</strong>
+            <p class="muted">当前还没有新的订单或退款通知。</p>
           </div>
         `;
         return;
@@ -4704,25 +3443,25 @@
 
       listBox.innerHTML = notifications.map((item) => {
         const relatedOrderLink = item.relatedOrderId
-          ? `<a class="button button-ghost" href="${ROUTES.passenger.orderDetail}?orderId=${item.relatedOrderId}">鏌ョ湅璁㈠崟</a>`
+          ? `<a class="button button-ghost" href="${ROUTES.passenger.orderDetail}?orderId=${item.relatedOrderId}">查看订单</a>`
           : "";
 
         return `
           <div class="order-card">
             <div class="order-top">
               <div>
-                <strong>${escapeHtml(item.title || "绯荤粺閫氱煡")}</strong>
+                <strong>${escapeHtml(item.title || "系统通知")}</strong>
                 <div class="list-meta">
                   <span>${escapeHtml(item.type || "--")}</span>
                   <span>${escapeHtml(formatFullDateTime(item.createdAt))}</span>
-                  <span>${item.isRead ? "宸茶" : "鏈"}</span>
+                  <span>${item.isRead ? "已读" : "未读"}</span>
                 </div>
                 <p class="muted">${escapeHtml(item.content || "")}</p>
               </div>
-              <span class="badge">${item.isRead ? "宸茶" : "鏈"}</span>
+              <span class="badge">${item.isRead ? "已读" : "未读"}</span>
             </div>
             <div class="button-row">
-              ${!item.isRead ? `<button class="button button-secondary" type="button" data-notification-read="${item.id}">鏍囪宸茶</button>` : ""}
+              ${!item.isRead ? `<button class="button button-secondary" type="button" data-notification-read="${item.id}">标记已读</button>` : ""}
               ${relatedOrderLink}
             </div>
           </div>
@@ -4738,16 +3477,16 @@
 
           try {
             button.disabled = true;
-            button.textContent = "澶勭悊涓?..";
+            button.textContent = "处理?..";
             await api.post(API_ENDPOINTS.notification.markRead, {}, {
               pathParams: { notificationId },
             });
-            showToast("宸叉爣璁颁负宸茶");
+            showToast("已标记为已读");
             await loadNotifications();
           } catch (error) {
             button.disabled = false;
-            button.textContent = "鏍囪宸茶";
-            showToast(error.message || "鎿嶄綔澶辫触");
+            button.textContent = "标记已读";
+            showToast(error.message || "操作失败");
           }
         });
       });
@@ -4762,30 +3501,30 @@
       const notifications = Array.isArray(listResult?.data) ? listResult.data : [];
       const unreadCount = Number(unreadResult?.data?.unreadCount || 0);
 
-      unreadBox.textContent = `鏈 ${unreadCount}`;
+      unreadBox.textContent = `未读 ${unreadCount}`;
       renderList(notifications);
     };
 
     readAllButton.addEventListener("click", async () => {
       try {
         readAllButton.disabled = true;
-        readAllButton.textContent = "澶勭悊涓?..";
+        readAllButton.textContent = "处理?..";
         await api.post(API_ENDPOINTS.notification.markAllRead, {});
-        showToast("鍏ㄩ儴閫氱煡宸叉爣璁颁负宸茶");
+        showToast("鍏ㄩ通知已标记为已读");
         await loadNotifications();
       } catch (error) {
-        showToast(error.message || "鎿嶄綔澶辫触");
+        showToast(error.message || "操作失败");
       } finally {
         readAllButton.disabled = false;
-        readAllButton.textContent = "鍏ㄩ儴宸茶";
+        readAllButton.textContent = "鍏ㄩ已读";
       }
     });
 
     loadNotifications().catch((error) => {
-      unreadBox.textContent = "鏈 --";
+      unreadBox.textContent = "未读 --";
       listBox.innerHTML = `
         <div class="info-card">
-          <strong>閫氱煡鍔犺浇澶辫触</strong>
+          <strong>通知加载失败</strong>
           <p class="muted">${escapeHtml(error.message || "请稍后重试")}</p>
         </div>
       `;
@@ -4842,32 +3581,32 @@
 
     const renderSummary = (summary) => {
       summaryBox.innerHTML = `
-        <span class="mini-chip">Total ${Number(summary?.totalUsers || 0)}</span>
+        <span class="mini-chip">用户总数 ${Number(summary?.totalUsers || 0)}</span>
         <span class="mini-chip">${escapeHtml(ROLE_LABELS.passenger || "passenger")} ${Number(summary?.passengerCount || 0)}</span>
         <span class="mini-chip">${escapeHtml(ROLE_LABELS.driver || "driver")} ${Number(summary?.driverCount || 0)}</span>
         <span class="mini-chip">${escapeHtml(ROLE_LABELS.admin || "admin")} ${Number(summary?.adminCount || 0)}</span>
-        <span class="mini-chip">Active ${Number(summary?.activeCount || 0)}</span>
-        <span class="mini-chip">Frozen ${Number(summary?.frozenCount || 0)}</span>
-        <span class="mini-chip">Verified ${Number(summary?.verifiedCount || 0)}</span>
+        <span class="mini-chip">正常 ${Number(summary?.activeCount || 0)}</span>
+        <span class="mini-chip">冻结 ${Number(summary?.frozenCount || 0)}</span>
+        <span class="mini-chip">已实名 ${Number(summary?.verifiedCount || 0)}</span>
       `;
     };
 
     const renderRealName = (user) => {
       if (user?.realNameVerified && user?.realName) {
-        return `${user.realName} / verified`;
+        return `${user.realName} / 已实名`;
       }
       if (user?.realNameVerified) {
-        return "verified";
+        return "已实名";
       }
-      return "unverified";
+      return "未实名";
     };
 
     const renderList = (users, reload) => {
       if (!users.length) {
-        listBox.innerHTML = `<tr><td colspan="8">鏆傛棤鐢ㄦ埛鏁版嵁</td></tr>`;
+        listBox.innerHTML = `<tr><td colspan="8">暂无用户数据</td></tr>`;
         emptyState.innerHTML = `
-          <strong>鏆傛棤鐢ㄦ埛</strong>
-          <p class="muted">鍚庣褰撳墠娌℃湁绗﹀悎鏉′欢鐨勭敤鎴疯褰曘€?/p>
+          <strong>暂无用户</strong>
+          <p class="muted">当前没有符合筛选条件的用户记录。</p>
         `;
         return;
       }
@@ -4889,15 +3628,15 @@
               <select class="table-inline-select" data-admin-user-status>
                 ${buildSelectOptions(statusOptions, user.status)}
               </select>
-              <button class="button button-secondary" type="button" data-admin-user-save="${user.id}">淇濆瓨</button>
+              <button class="button button-secondary" type="button" data-admin-user-save="${user.id}">保存</button>
             </div>
           </td>
         </tr>
       `).join("");
 
       emptyState.innerHTML = `
-        <strong>鐢ㄦ埛鍒楄〃宸插悓姝?/strong>
-        <p class="muted">褰撳墠宸插姞杞?${users.length} 鏉＄湡瀹炵敤鎴疯褰曪紝鏀寔绛涢€夈€佽鑹茶皟鏁村拰璐﹀彿鐘舵€佺淮鎶ゃ€?/p>
+        <strong>用户列表已同步</strong>
+        <p class="muted">当前已加载 ${users.length} 条真实用户记录，支持筛选、角色调整和账号状态维护。</p>
       `;
 
       listBox.querySelectorAll("[data-admin-user-save]").forEach((button) => {
@@ -4916,25 +3655,25 @@
           const currentStatus = row.getAttribute("data-current-status") || "";
 
           if (nextRole === currentRole && nextStatus === currentStatus) {
-            showToast("No changes");
+            showToast("没有需要保存的修改");
             return;
           }
 
           try {
             button.disabled = true;
-            button.textContent = "Saving...";
+            button.textContent = "保存中...";
             await api.patch(API_ENDPOINTS.admin.updateUser, {
               role: nextRole,
               status: nextStatus,
             }, {
               pathParams: { userId },
             });
-            showToast("User updated");
+            showToast("用户已更新");
             await reload();
           } catch (error) {
             button.disabled = false;
-            button.textContent = "淇濆瓨";
-            showToast(error.message || "Update failed");
+            button.textContent = "保存";
+            showToast(error.message || "更新失败");
           }
         });
       });
@@ -4949,10 +3688,10 @@
         renderSummary(summaryResult?.data || {});
         renderList(Array.isArray(listResult?.data) ? listResult.data : [], loadUsers);
       } catch (error) {
-        summaryBox.innerHTML = `<span class="mini-chip">Load failed</span>`;
-        listBox.innerHTML = `<tr><td colspan="8">鐢ㄦ埛鍒楄〃鍔犺浇澶辫触</td></tr>`;
+        summaryBox.innerHTML = `<span class="mini-chip">加载失败</span>`;
+        listBox.innerHTML = `<tr><td colspan="8">用户列表加载失败</td></tr>`;
         emptyState.innerHTML = `
-          <strong>鐢ㄦ埛鏁版嵁鍔犺浇澶辫触</strong>
+          <strong>用户数据加载失败</strong>
           <p class="muted">${escapeHtml(error.message || "请稍后重试")}</p>
         `;
       }
@@ -4995,7 +3734,7 @@
     }
 
     const setLoadError = (message) => {
-      summaryBox.innerHTML = `<span class="mini-chip">Load failed</span>`;
+      summaryBox.innerHTML = `<span class="mini-chip">加载失败</span>`;
       if (totalUsersBox) totalUsersBox.textContent = "--";
       if (activeUsersBox) activeUsersBox.textContent = "--";
       if (pendingBox) pendingBox.textContent = "--";
@@ -5004,9 +3743,9 @@
       if (passengerCountBox) passengerCountBox.textContent = "--";
       if (driverCountBox) driverCountBox.textContent = "--";
       if (adminCountBox) adminCountBox.textContent = "--";
-      if (pendingNote) pendingNote.textContent = "璇风◢鍚庨噸璇?";
+      if (pendingNote) pendingNote.textContent = "请稍后重试";
       emptyState.innerHTML = `
-        <strong>鍚庡彴缁熻鍔犺浇澶辫触</strong>
+        <strong>后台统计加载失败</strong>
         <p class="muted">${escapeHtml(message || "请稍后重试")}</p>
       `;
     };
@@ -5027,12 +3766,12 @@
         const verifiedCount = Number(summary.verifiedCount || 0);
 
         summaryBox.innerHTML = `
-          <span class="mini-chip">Total ${totalUsers}</span>
-          <span class="mini-chip">Active ${activeUsers}</span>
-          <span class="mini-chip">Verified ${verifiedCount}</span>
-          <span class="mini-chip">Frozen ${frozenCount}</span>
-          <span class="mini-chip">Disabled ${disabledCount}</span>
-          <span class="mini-chip">Refund ${pendingRefundCount}</span>
+          <span class="mini-chip">用户总数 ${totalUsers}</span>
+          <span class="mini-chip">正常用户 ${activeUsers}</span>
+          <span class="mini-chip">已实名 ${verifiedCount}</span>
+          <span class="mini-chip">冻结 ${frozenCount}</span>
+          <span class="mini-chip">禁用 ${disabledCount}</span>
+          <span class="mini-chip">待退款 ${pendingRefundCount}</span>
         `;
         if (totalUsersBox) totalUsersBox.textContent = String(totalUsers);
         if (activeUsersBox) activeUsersBox.textContent = String(activeUsers);
@@ -5044,15 +3783,15 @@
         if (adminCountBox) adminCountBox.textContent = String(adminCount);
         if (pendingNote) {
           pendingNote.textContent = pendingRefundCount > 0
-            ? `褰撳墠杩樻湁 ${pendingRefundCount} 绗旈€€娆惧緟澶勭悊`
-            : `褰撳墠鍏辨湁 ${activeUsers} 涓椿璺冭处鍙凤紝鍐荤粨 ${frozenCount}锛岀鐢?${disabledCount}`;
+            ? `当前还有 ${pendingRefundCount} 笔退款待处理`
+            : `当前共有 ${activeUsers} 个正常账号，冻结 ${frozenCount}，禁用 ${disabledCount}`;
         }
         emptyState.innerHTML = pendingRefundCount > 0
-          ? `<strong>閫€娆惧緟鍔炴彁閱?/strong><p class="muted">寤鸿浼樺厛澶勭悊閫€娆惧鏍革紝閬垮厤涔樺绛夊緟杩囦箙銆?/p>`
-          : `<strong>鍚庡彴杩愯姝ｅ父</strong><p class="muted">褰撳墠娌℃湁寰呭鏍搁€€娆撅紝宸插疄鍚嶇敤鎴?${verifiedCount} 涓紝鍙互缁х画鏌ョ湅鐢ㄦ埛鍒楄〃鎴栧叾浠栧悗鍙版ā鍧椼€?/p>`;
+          ? `<strong>退款待办提醒</strong><p class="muted">建议优先处理退款审核，避免乘客等待过久。</p>`
+          : `<strong>后台运行正常</strong><p class="muted">当前没有待审核退款，已实名用户 ${verifiedCount} 个，可以继续查看用户列表或其他后台模块。</p>`;
       })
       .catch((error) => {
-        setLoadError(error.message || "缁熻鍔犺浇澶辫触");
+        setLoadError(error.message || "统计加载失败");
     });
   }
 
@@ -5093,22 +3832,22 @@
                 <strong>${escapeHtml(item.route || "--")}</strong>
                 <div class="list-meta">
                   <span>${escapeHtml(formatFullDateTime(item.departureTime))}</span>
-                  <span>宸插敭 ${Number(item.soldTickets || 0)} / ${Number(item.seatTotal || 0)}</span>
-                  <span>棰勮鏀跺叆 ${escapeHtml(formatMoneyFromCent(item.estimatedIncome || 0))}</span>
+                  <span>已售 ${Number(item.soldTickets || 0)} / ${Number(item.seatTotal || 0)}</span>
+                  <span>预计收入 ${escapeHtml(formatMoneyFromCent(item.estimatedIncome || 0))}</span>
                 </div>
               </div>
             `).join("")
           : `
               <div class="info-card">
-                <strong>鏈潵 4 灏忔椂鏆傛棤鐝</strong>
-                <p class="muted">鍙互鍓嶅線鍙戝竷椤靛垱寤烘柊鐨勭彮娆°€?/p>
+                <strong>未来 4 小时暂无班次</strong>
+                <p class="muted">可以前往发布页创建新的班次。</p>
               </div>
             `;
 
         const alerts = Array.isArray(data.alerts) ? data.alerts : [];
         alertList.innerHTML = alerts.map((text) => `
           <div class="info-card">
-            <strong>杩愯惀鎻愰啋</strong>
+            <strong>运营提醒</strong>
             <p class="muted">${escapeHtml(text)}</p>
           </div>
         `).join("");
@@ -5116,13 +3855,13 @@
       .catch((error) => {
         upcomingList.innerHTML = `
           <div class="info-card">
-            <strong>鐝鍔犺浇澶辫触</strong>
+            <strong>班次加载失败</strong>
             <p class="muted">${escapeHtml(error.message || "请稍后重试")}</p>
           </div>
         `;
         alertList.innerHTML = `
           <div class="info-card">
-            <strong>鎻愰啋鍔犺浇澶辫触</strong>
+            <strong>提醒加载失败</strong>
             <p class="muted">${escapeHtml(error.message || "请稍后重试")}</p>
           </div>
         `;
@@ -5163,21 +3902,21 @@
                 <div class="list-meta">
                   <span>${escapeHtml(formatMoneyFromCent(item.income || 0))}</span>
                   <span>${Number(item.ticketCount || 0)} 寮?/span>
-                  <span>涓婂骇鐜?${Math.round(Number(item.occupancyRate || 0) * 100)}%</span>
+                  <span>上座率 ${Math.round(Number(item.occupancyRate || 0) * 100)}%</span>
                 </div>
               </div>
             `).join("")
           : `
               <div class="info-card">
-                <strong>鏆傛棤鏀跺叆鏁版嵁</strong>
-                <p class="muted">褰撳墠杩樻病鏈夊彲缁熻鐨勫徃鏈烘敹鍏ャ€?/p>
+                <strong>暂无收入数据</strong>
+                <p class="muted">当前还没有可统计的司机收入。</p>
               </div>
             `;
 
         const suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
         suggestionList.innerHTML = suggestions.map((text) => `
           <div class="info-card">
-            <strong>AI 缁忚惀寤鸿</strong>
+            <strong>AI 经营建议</strong>
             <p class="muted">${escapeHtml(text)}</p>
           </div>
         `).join("");
@@ -5185,13 +3924,13 @@
       .catch((error) => {
         routeList.innerHTML = `
           <div class="info-card">
-            <strong>鏀跺叆鍔犺浇澶辫触</strong>
+            <strong>收入加载失败</strong>
             <p class="muted">${escapeHtml(error.message || "请稍后重试")}</p>
           </div>
         `;
         suggestionList.innerHTML = `
           <div class="info-card">
-            <strong>寤鸿鍔犺浇澶辫触</strong>
+            <strong>建议加载失败</strong>
             <p class="muted">${escapeHtml(error.message || "请稍后重试")}</p>
           </div>
         `;
@@ -5225,26 +3964,26 @@
           </div>
         </div>
       <div class="list-item">
-        <strong>鐝鍙傛暟</strong>
+        <strong>班次参数</strong>
         <div class="list-meta">
-          <span>绁ㄤ环 ${escapeHtml(formatPriceCent(draft.priceCent || 0))}</span>
-          <span>搴т綅 ${escapeHtml(String(draft.seatTotal || 0))}</span>
+          <span>票价 ${escapeHtml(formatPriceCent(draft.priceCent || 0))}</span>
+          <span>座位 ${escapeHtml(String(draft.seatTotal || 0))}</span>
           <span>${escapeHtml(draft.vehicleType || "--")}</span>
         </div>
       </div>
         <div class="list-item">
-          <strong>閫旂粡绔欑偣</strong>
+          <strong>途经站点</strong>
           <div class="list-meta">
             <span>${escapeHtml(stops.length ? stops.join("、") : "无")}</span>
           </div>
         </div>
         <div class="info-card">
-          <strong>澶囨敞</strong>
+          <strong>备注</strong>
           <p class="muted">${escapeHtml(draft.remark || "--")}</p>
         </div>
         ${suggestions.map((item) => `
           <div class="info-card">
-            <strong>AI 寤鸿</strong>
+            <strong>AI 建议</strong>
             <p class="muted">${escapeHtml(item)}</p>
           </div>
         `).join("")}
@@ -5256,7 +3995,7 @@
       const formData = new window.FormData(form);
       const prompt = String(formData.get("prompt") || "").trim();
       if (!prompt) {
-        showToast("璇疯緭鍏ョ彮娆℃弿杩?");
+        showToast("请输入班次描述");
         return;
       }
 
@@ -5270,17 +4009,17 @@
 
         renderDraft(currentDraft);
         applyButton.disabled = false;
-        showToast("AI 鑽夌宸茬敓鎴?");
+        showToast("AI 草稿已生成");
       } catch (error) {
         currentDraft = null;
         resultBox.innerHTML = `
           <div class="info-card">
-            <strong>鐢熸垚澶辫触</strong>
+            <strong>生成失败</strong>
             <p class="muted">${escapeHtml(error.message || "请稍后重试")}</p>
           </div>
         `;
         applyButton.disabled = true;
-        showToast(error.message || "AI 鐢熸垚澶辫触");
+        showToast(error.message || "AI 生成失败");
       }
     });
 
@@ -5303,15 +4042,15 @@
     const raw = String(value || "").trim();
 
     if (!raw) {
-      return "鍟嗗姟澶у反";
+      return "商务у反";
     }
     if (raw.includes("鎷艰溅")) {
-      return "鎷艰溅涓撶嚎";
+      return "拼车专线";
     }
     if (raw.includes("蹇嚎")) {
       return "鍩庨檯蹇嚎";
     }
-    return "鍟嗗姟澶у反";
+    return "商务у反";
   }
 
   function splitDriverStops(value) {
@@ -5339,43 +4078,43 @@
     const priceCent = Number(draft?.priceCent || 0);
 
     if (!startCity) {
-      errors.push("缂哄皯璧风偣");
+      errors.push("缺少起点");
     }
     if (!endCity) {
-      errors.push("缂哄皯缁堢偣");
+      errors.push("缺少终点");
     }
     if (startCity && endCity && startCity === endCity) {
-      errors.push("璧风偣鍜岀粓鐐逛笉鑳界浉鍚?");
+      errors.push("起点和终点不能相同");
     }
     if (!departureLocal) {
-      errors.push("缂哄皯鍑哄彂鏃堕棿");
+      errors.push("缺少出发时间");
     }
 
     const departureDate = departureLocal ? new Date(departureLocal) : null;
     if (departureDate && Number.isNaN(departureDate.getTime())) {
-      errors.push("鍑哄彂鏃堕棿鏍煎紡涓嶆纭?");
+      errors.push("出发时间格式不正?");
     }
 
     let arrivalDate = arrivalLocal ? new Date(arrivalLocal) : null;
     if (arrivalLocal && arrivalDate && Number.isNaN(arrivalDate.getTime())) {
-      errors.push("鍒拌揪鏃堕棿鏍煎紡涓嶆纭?");
+      errors.push("到达时间格式不正?");
     }
 
     if ((!arrivalLocal || (arrivalDate && Number.isNaN(arrivalDate.getTime()))) && departureDate && !Number.isNaN(departureDate.getTime())) {
       arrivalDate = new Date(departureDate.getTime() + 2 * 60 * 60 * 1000 + 15 * 60 * 1000);
       arrivalLocal = formatLocalInputDateTime(arrivalDate.toISOString());
-      warnings.push("鏈彁渚涙湁鏁堝埌杈炬椂闂达紝宸叉寜鍑哄彂鍚?2 灏忔椂 15 鍒嗚嚜鍔ㄦ帹鏂?");
+      warnings.push("未提供有效到达时间，已按出发后 2 小时 15 分自动推算");
     }
 
     if (departureDate && arrivalDate && !Number.isNaN(departureDate.getTime()) && !Number.isNaN(arrivalDate.getTime()) && arrivalDate.getTime() <= departureDate.getTime()) {
-      errors.push("鍒拌揪鏃堕棿蹇呴』鏅氫簬鍑哄彂鏃堕棿");
+      errors.push("到达时间必须晚于出发时间");
     }
 
     if (!Number.isFinite(seatTotal) || seatTotal <= 0) {
-      errors.push("搴т綅鏁板繀椤诲ぇ浜?0");
+      errors.push("座位数必须大于 0");
     }
     if (!Number.isFinite(priceCent) || priceCent <= 0) {
-      errors.push("绁ㄤ环蹇呴』澶т簬 0");
+      errors.push("票价必须大于 0");
     }
 
     const stopNames = Array.isArray(draft?.stops)
@@ -5386,7 +4125,7 @@
     const seen = new Set();
     for (const stopName of stopNames) {
       if (stopName === startCity || stopName === endCity) {
-        warnings.push(`閫旂粡绔欑偣 ${stopName} 涓庤捣缁堢偣閲嶅锛屽凡鑷姩蹇界暐`);
+        warnings.push(`途经站点 ${stopName} 与起终点重复，已自动忽略`);
         continue;
       }
       if (seen.has(stopName)) {
@@ -5397,7 +4136,7 @@
     }
 
     if (dedupStops.length > 5) {
-      warnings.push("閫旂粡绔欑偣杈冨锛屽缓璁帶鍒跺湪 5 涓互鍐?");
+      warnings.push("途经站点较多，建议控制在 5 个以?");
     }
 
     return {
@@ -5442,8 +4181,8 @@
       if (!check.errors.length && !check.warnings.length) {
         validationBox.innerHTML = `
           <div class="info-card">
-            <strong>鏍￠獙閫氳繃</strong>
-            <p class="muted">鑽夌鍙互鐩存帴鍙戝竷銆?/p>
+            <strong>校验通过</strong>
+            <p class="muted">草稿可以直接发布。</p>
           </div>
         `;
       } else {
@@ -5488,26 +4227,26 @@
           </div>
         </div>
         <div class="list-item">
-          <strong>鐝鍙傛暟</strong>
+          <strong>班次参数</strong>
           <div class="list-meta">
-            <span>绁ㄤ环 ${escapeHtml(formatPriceCent(draft.priceCent || 0))}</span>
-            <span>搴т綅 ${escapeHtml(String(draft.seatTotal || 0))}</span>
+            <span>票价 ${escapeHtml(formatPriceCent(draft.priceCent || 0))}</span>
+            <span>座位 ${escapeHtml(String(draft.seatTotal || 0))}</span>
             <span>${escapeHtml(draft.vehicleType || "--")}</span>
           </div>
         </div>
         <div class="list-item">
-          <strong>閫旂粡绔欑偣</strong>
+          <strong>途经站点</strong>
           <div class="list-meta">
             <span>${escapeHtml(stops.length ? stops.join("、") : "无")}</span>
           </div>
         </div>
         <div class="info-card">
-          <strong>澶囨敞</strong>
+          <strong>备注</strong>
           <p class="muted">${escapeHtml(draft.remark || "--")}</p>
         </div>
         ${suggestions.map((item) => `
           <div class="info-card">
-            <strong>AI 寤鸿</strong>
+            <strong>AI 建议</strong>
             <p class="muted">${escapeHtml(item)}</p>
           </div>
         `).join("")}
@@ -5521,7 +4260,7 @@
       const formData = new window.FormData(form);
       const prompt = String(formData.get("prompt") || "").trim();
       if (!prompt) {
-        showToast("璇疯緭鍏ョ彮娆℃弿杩?");
+        showToast("请输入班次描述");
         return;
       }
 
@@ -5537,28 +4276,28 @@
 
         renderDraft(currentDraft);
         applyButton.disabled = false;
-        showToast("AI 鑽夌宸茬敓鎴?");
+        showToast("AI 草稿已生成");
       } catch (error) {
         currentDraft = null;
         resultBox.innerHTML = `
           <div class="info-card">
-            <strong>鐢熸垚澶辫触</strong>
+            <strong>生成失败</strong>
             <p class="muted">${escapeHtml(error.message || "请稍后重试")}</p>
           </div>
         `;
         validationBox.innerHTML = `
           <div class="info-card">
-            <strong>鍥為€€寤鸿</strong>
-            <p class="muted">浣犲彲浠ユ敼鎴愭洿鏍囧噯鐨勬弿杩板啀璇曚竴娆★紝渚嬪锛氭槑鏅?8:30浠庢澀宸炰笢鍒拌嫃宸炲寳锛屽晢鍔″ぇ宸达紝24搴э紝绁ㄤ环168锛岄€旂粡鍢夊叴鍗椼€佷笂娴疯櫣妗ワ紝棰勮2灏忔椂15鍒嗐€?/p>
+            <strong>修改建议</strong>
+            <p class="muted">你可以换成更标准的描述再试一次，例如：明早 8:30 从杭州东到苏州北，商务大巴，24 座，票价 168，途经嘉兴南、上海虹桥，预计 2 小时 15 分。</p>
           </div>
           <div class="info-card">
-            <strong>鎵嬪伐鍙戝竷寤鸿</strong>
-            <p class="muted">濡傛灉 AI 鎸佺画澶辫触锛屽彲浠ョ偣鍑烩€滄墦寮€鍙戝竷椤碘€濓紝鎵嬪伐琛ュ厖璧风粓鐐广€佹椂闂淬€佺エ浠峰拰绔欑偣銆?/p>
+            <strong>手工发布建议</strong>
+            <p class="muted">如果 AI 持续失败，可以点击“打开发布页”，手工补充起终点、时间、票价和站点。</p>
           </div>
         `;
         applyButton.disabled = true;
         publishButton.disabled = true;
-        showToast(error.message || "AI 鐢熸垚澶辫触");
+        showToast(error.message || "AI 生成失败");
       }
     });
 
@@ -5584,18 +4323,18 @@
       const check = buildDriverTripPayloadFromDraft(currentDraft);
       renderValidation(currentDraft);
       if (!check.ok) {
-        showToast(check.errors[0] || "鑽夌鏍￠獙鏈€氳繃");
+        showToast(check.errors[0] || "草稿校验未通过");
         return;
       }
 
       try {
         publishButton.disabled = true;
-        publishButton.textContent = "鍙戝竷涓?..";
+        publishButton.textContent = "发布?..";
 
         const result = await api.post(API_ENDPOINTS.driver.trips, check.payload);
         const trip = result?.data || null;
 
-        showToast("鐝鍙戝竷鎴愬姛");
+        showToast("班次发布成功");
         window.setTimeout(() => {
           if (trip?.id) {
             redirectTo(`${ROUTES.driver.tripDetail}?tripId=${trip.id}`);
@@ -5606,17 +4345,17 @@
       } catch (error) {
         validationBox.innerHTML = `
           <div class="info-card">
-            <strong>鍙戝竷澶辫触</strong>
+            <strong>发布失败</strong>
             <p class="muted">${escapeHtml(error.message || "请稍后重试")}</p>
           </div>
           <div class="info-card">
-            <strong>鍥為€€寤鸿</strong>
-            <p class="muted">鍙互鍏堢偣鍑烩€滃啓鍏ュ彂甯冮〉鈥濓紝妫€鏌ユ椂闂淬€佷环鏍煎拰绔欑偣鍚庡啀鎵嬪伐鎻愪氦銆?/p>
+            <strong>修改建议</strong>
+            <p class="muted">可以先点击“写入发布页”，检查时间、价格和站点后再手工提交。</p>
           </div>
         `;
-        showToast(error.message || "鍙戝竷澶辫触");
+        showToast(error.message || "发布失败");
       } finally {
-        publishButton.textContent = "涓€閿彂甯?";
+        publishButton.textContent = "一键发布";
         renderValidation(currentDraft);
       }
     });
@@ -5668,7 +4407,7 @@
       // Ignore storage failures.
     }
 
-    showToast("AI 鑽夌宸插啓鍏ュ彂甯冮〉");
+    showToast("AI 草稿已写入发布页");
   }
 
   function initPassengerAiLegacy() {

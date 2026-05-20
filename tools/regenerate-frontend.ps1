@@ -42,8 +42,8 @@ function Header {
 
 function Footer {
 @"
-  <script src="assets/runtime-config.js?v=20260519-blue-ui"></script>
-  <script src="assets/app.js?v=20260519-blue-ui"></script>
+  <script src="assets/runtime-config.js?v=20260520-data-fix"></script>
+  <script src="assets/app.js?v=20260520-data-fix"></script>
 </body>
 </html>
 "@
@@ -648,3 +648,4 @@ foreach ($entry in $pages.GetEnumerator()) {
 Write-Utf8File (Join-Path $assets "styles.css") $styles
 
 Write-Host ('Regenerated {0} frontend pages and shared styles.' -f $pages.Count)
+
